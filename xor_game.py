@@ -20,8 +20,10 @@ count = 50
 audiosize = 0
 pixels = None
 channels = None
-video_count = 2 if pixels is None else pixels ** 2 * channels
-output_count = 1
+repeats = 8
+base_input = 2
+video_count = base_input * repeats if pixels is None else pixels ** 2 * channels
+output_count = 5
 max_freq = 50
 randomsize = 0
 audvis_count = video_count + audiosize
@@ -30,8 +32,8 @@ firing_history = 200
 sensory_count = audvis_count + randomsize
 gamma = 0.01
 #gamma = 0.002
-threshold = 0.5
-limits = 10
+threshold = 0.6
+limits = 1
 reward_amount = 2.0
 decay = 1 - 1E-8
 base_time = 1549200000
@@ -41,32 +43,35 @@ exp_decay = np.power(gamma, -np.arange(firing_history - 1))[None, :, None]
 
 class Mind:
     def __init__(self, exec, init_gamma, mode=None):
-        self.neurons = np.random.uniform(-2, 2, size=(count, dims))
+        # Physical position in space
+        self.neurons = np.random.uniform(size=(count, dims))
         self.neurons[-1][-output_count:] = 0.7
         if pixels is not None:
             visual_map = np.mgrid[0.3:0.7:pixels * 1j, 0.3:0.7:pixels * 1j, 0.2:0.4:channels * 1j]
         else:
-            visual_map = np.mgrid[0.3:0.7:video_count * 1j, 0.49:0.51:1j, 0.29:0.31:1j]
+            visual_map = np.mgrid[0.3:0.7:base_input * 1j, 0.3:0.7:repeats * 1j, 0.29:0.31:1j]
         visual_map = visual_map.reshape(dims, -1).T
         self.mode = mode
-        self.xor = np.asarray([0,0])
+        self.xor = np.zeros(video_count)
         self.neurons[:video_count] = visual_map
         self.dists = np.sqrt(np.mean(np.square(self.neurons[None, :, :] - self.neurons[:, None, :]), axis=-1))
         self.firings = np.random.binomial(size=(firing_history, count), n=1, p=0.5)
         self.connections = (
                 (self.dists > 0) *
                 (self.dists < np.percentile(self.dists, percentile)) *
-                np.random.uniform(size=self.dists.shape, low=-2, high=2)
+                np.random.uniform(size=self.dists.shape, low=-limits, high=limits)
         )
         self.plastic = np.ones_like(self.connections)
         # Disable connections coming into the sensory neurons
         self.connections[:, :sensory_count] = 0
-        self.plastic[self.connections == 0] = 0
+        self.connections[:sensory_count, -output_count:] = 0
         # Disable connections coming out of the sensory neurons
+        # self.connections[:, -1] = 1
         self.connections[-output_count:, :] = 0
+        self.plastic[self.connections == 0] = 0
         self.gamma = init_gamma
         self.exec = exec
-        self.lr_decay = 1 - self.gamma / 10000
+        self.lr_decay = 1 - self.gamma / 10
         self.acc_decay = 0.99
         self.screen_cur = None
         self.screen_prev = None
@@ -95,8 +100,8 @@ class Mind:
     def fire(self):
         if self.sight is not None:
             visual = self.sight.flatten()
-            print("firings", (self.connections @ self.firings[-1]))
-            firings_next = ((self.connections @ self.firings[-1]) > threshold).astype(float)
+            # print("firings", (self.firings[-1] @ self.connections))
+            firings_next = ((self.firings[-1] @ self.connections) > threshold).astype(float)
             # firings_next[:len(visual)] = visual > visual.mean()
             if self.mode is "xor":
                 firings_next[:len(visual)] = visual
@@ -114,7 +119,6 @@ class Mind:
 
     # Weaken old connections over time
     def decay(self):
-        print("ITERATION: " + str(self.iter_num))
         if self.iter_num % 10000 == 0:
             #plt.close()
             plt.imshow(self.connections)
@@ -139,7 +143,7 @@ class Mind:
         # print("b", b)
         # print("c", c)
         # print("d", d)
-        return np.multiply(c, d)
+        return np.multiply(c, d | d.T)
 
     def learn(self, alpha=1.0):
         # print("Alpha", alpha)
@@ -149,14 +153,15 @@ class Mind:
         # print("WOW", np.abs(wow).mean())
         #plt.imshow(wow)
         #plt.show()
-        self.accumulation += np.abs(wow[sensory_count:-output_count, sensory_count:-output_count]) \
-                             * self.gamma * alpha
-        self.accumulation *= self.acc_decay
+
+        # self.accumulation += np.abs(wow[sensory_count:-output_count, sensory_count:-output_count]) \
+        #                      * self.gamma * alpha
+        # self.accumulation *= self.acc_decay
         # subplastic = self.plastic[sensory_count:-output_count, sensory_count:-output_count]
         # synapse_strength = np.abs(self.connections)[sensory_count:-output_count, sensory_count:-output_count]
-        # updates = (self.accumulation <= 0.001/(1 - self.acc_decay)) * (synapse_strength >= np.sum(synapse_strength * subplastic) / subplastic.sum())
+        # updates = (self.accumulation <= 0.1/(1 - self.acc_decay)) * (synapse_strength >= np.sum(synapse_strength * subplastic) / subplastic.sum())
         # self.plastic[sensory_count:-output_count, sensory_count:-output_count][updates] = 0
-        # print("Plastic", self.plastic)
+        # print("Plastic", self.plastic.mean())
         self.connections += self.connections * wow * self.gamma * alpha
         self.connections = self.connections.clip(-limits, limits)
         self.gamma *= self.lr_decay
@@ -275,15 +280,24 @@ def main():
 
     def processing(count):
         george.fire()
-        print(george.xor, george.firings[-1][-1])
-        if count > 2:
+        print(george.xor, george.firings[-1][-output_count:].mean(), "ITERATION: " + str(george.iter_num))
+        if count > 2 and count % 20 > 5:
             # if george.firings[-1][-1]:
-            if george.xor.sum() % 2 == george.firings[-1][-1]:
+            print(george.xor.sum() / repeats % 2, george.firings[-1][-output_count:].mean().round(), george.xor.sum() / repeats % 2 == george.firings[-1][-output_count:].mean().round())
+            if george.xor.sum() / repeats % 2 == george.firings[-1][-output_count:].mean().round():
                 print("good")
-                george.learn(1)
+                if george.xor.sum() % 2 == 1:
+                    george.learn(1)
+                else:
+                    george.learn(1)
+                george.connections *= 1 + gamma
             else:
                 print("bad")
-                george.learn(-1)
+                if george.xor.sum() / repeats % 2 == 1:
+                    george.learn(-1)
+                else:
+                    george.learn(-1)
+                george.connections *= 1 - gamma
         # if george.screen_prev is not None:
         #     nov = np.abs(george.screen_cur - george.screen_prev).mean()
         # else:
@@ -305,8 +319,8 @@ def main():
         # show()
         input()
         count += 1
-        if count % 100 == 0:
-            george.xor = np.random.binomial(1, 0.5, (2,))
+        if count % 20 == 0:
+            george.xor = np.random.binomial(1, 0.5, (2,)).repeat(repeats)
         processing(count)
         if george.mode is not "xor":
             output(keyboard_press)
@@ -316,17 +330,3 @@ def main():
         #     george.reward()
 
 main()
-
-# threshold = 0.5
-# input = [1, 1]
-# next = np.asarray([
-#     [0,0,1,0.5,0],
-#     [0,0,1,0.5,0],
-#     [0,0,0,0,1],
-#     [0,0,0,0,-1],
-#     [0,0,0,0,0]])
-# cur = np.asarray([0, 0, 0, 0,0])
-# for i in range(10):
-#     cur[0:2] = input
-#     cur = (cur @ next) > threshold
-# print(cur)
