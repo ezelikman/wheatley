@@ -11,9 +11,7 @@ from mss import mss
 from PIL import Image
 from concurrent.futures import ThreadPoolExecutor
 
-#count = 3
 dims = 3
-# percentile = 10
 percentile = 100
 
 count = 40
@@ -22,30 +20,27 @@ pixels = None
 channels = None
 repeats = 1
 base_input = 2
-video_count = base_input * repeats if pixels is None else pixels ** 2 * channels
 reward_size = 0
 output_count = 1
 max_freq = 50
 randomsize = 0
+video_count = base_input * repeats if pixels is None else pixels ** 2 * channels
 audvis_count = video_count + audiosize
 
 firing_history = 200
 sensory_count = audvis_count + randomsize + reward_size
-gamma = 0.001
-#gamma = 0.002
+gamma = 0.002
 threshold = 0.5
 limits = 2
-reward_amount = 2.0
+reward_amount = 12
 decay = 1 - gamma / 100
-base_time = 1549200000
 video_stream = False
 exp_decay = np.power(gamma, -np.arange(firing_history - 1))[None, :, None]
 
 
 class Mind:
     def __init__(self, exec, init_gamma, mode=None):
-        # Physical position in space
-        self.neurons = np.random.uniform(size=(count, dims))
+        self.neurons = np.random.uniform(size=(count, dims))  # Physical position in space
         self.neurons[-1][-output_count:] = 0.9
         if pixels is not None:
             visual_map = np.mgrid[0.3:0.7:pixels * 1j, 0.3:0.7:pixels * 1j, 0.2:0.4:channels * 1j]
@@ -59,11 +54,10 @@ class Mind:
         self.firings = np.random.binomial(size=(firing_history, count), n=1, p=0.5)
         self.connections = (
                 (self.dists > 0) *
-                (self.dists < 1.001 * np.percentile(self.dists, percentile)) *
-                # np.random.uniform(size=self.dists.shape, low=-limits/5, high=limits/5)
+                (self.dists <= np.percentile(self.dists, percentile)) *
                 np.random.uniform(size=self.dists.shape, low=-limits, high=limits)
         )
-        self.plastic = np.ones_like(self.connections)
+
         # Disable connections coming into the sensory neurons
         self.connections[:, :sensory_count] = 0
         # # Disable direct connections from the inputs to the outputs
@@ -74,6 +68,8 @@ class Mind:
         self.connections[sensory_count:, sensory_count:-output_count] = 0
         # # Disable connections coming out of the outputs
         # self.connections[-output_count:, :] = 0
+
+        self.plastic = np.ones_like(self.connections)
         self.plastic[self.connections == 0] = 0
         self.gamma = init_gamma
         self.exec = exec
@@ -96,12 +92,9 @@ class Mind:
         self.performance = np.asarray([])
 
     def output(self, keyboard_to_press):
-        print(self.firings[-1][-output_count:].mean(), "Out")
-        # if self.firings[-1][-output_count:].mean() > 0.5:
-        #     keyboard_to_press.press(" ")
         # if self.firings[-1][-output_count:].mean() > self.firings[:, -output_count:].mean():
         # if np.random.binomial(1, self.firings[-1][-output_count:].mean()) > 0.5:
-        if self.firings[-1][-output_count:].mean () >= 0.5:
+        if self.firings[-1][-output_count:].mean() >= 0.5:
             keyboard_to_press.press(" ")
         else:
             keyboard_to_press.release(" ")
@@ -125,9 +118,7 @@ class Mind:
             if audiosize > 0:
                 firings_next[len(visual):audvis_count] = self.sound > self.sound.mean()
             if randomsize > 0:
-                # firings_next[audvis_count:sensory_count] = np.random.uniform(randomsize)
                 firings_next[audvis_count:sensory_count] = np.random.binomial(size=(randomsize,), n=1, p=0.8)
-                # print(firings_next[audvis_count:sensory_count] )
             self.firings[:-1] = self.firings[1:]
             self.firings[-1] = firings_next
 
@@ -140,8 +131,8 @@ class Mind:
 
         if pixels is not None:
             plt.imshow(
-                ((self.connections * self.firings.mean(0)).sum(1) / self.firings.sum())[:video_count].reshape(pixels,
-                                                                                                              pixels))
+                ((self.connections * self.firings.mean(0)).sum(1) /
+                 self.firings.sum())[:video_count].reshape(pixels, pixels))
             plt.savefig("dinoboi_" + str(self.iter_num) + ".png")
             plt.show()
             plt.close()
@@ -154,28 +145,19 @@ class Mind:
         self.connections *= decay
 
     def stdp(self, a, b):
-        # print(a)
         a = np.asarray(a)[:, None]
         b = np.asarray(b)[None, :]
         c = b - (1 - a)
         d = a * b
-        # print("a", a.T)
-        # print("b", b)
-        # print("c", c)
-        # print("d", d)
         e = np.multiply(c, d | d.T)
-        # print(a.T)
-        # print(b)
-        # print(e)
         return e
 
-    def reinforce(self, alpha, past=4):
-        for i in range(past):
+    def reinforce(self, alpha, hist=4):
+        for i in range(hist):
             if alpha < 0:
-                self.connections[:, self.firings[-i-1].astype(bool)] /= 1 + self.gamma * np.abs(alpha)
+                self.connections[:, self.firings[-i-1].astype(bool)] /= 1 + self.gamma * np.abs(alpha) / hist
             else:
-                self.connections[:, self.firings[-i-1].astype(bool)] *= 1 + self.gamma * np.abs(alpha)
-
+                self.connections[:, self.firings[-i-1].astype(bool)] *= 1 + self.gamma * np.abs(alpha) / hist
 
     def learn(self, alpha=1.0):
         # print("Alpha", alpha)
@@ -304,43 +286,33 @@ def main():
 
     def processing(count):
         george.fire()
-        # print(george.xor, george.firings[-1][-output_count:].mean(), "ITERATION: " + str(george.iter_num))
-        if count > 2 and count % 20 > 4:
-            # if george.firings[-1][-1]:
-            # print(george.xor.sum() / repeats % 2, george.firings[-1][-output_count:].mean().round(), george.xor.sum() / repeats % 2 == george.firings[-1][-output_count:].mean().round())
-            if george.xor.sum() / repeats % 2 == george.firings[-1][-output_count:].mean().round():
-                george.performance = np.append(george.performance, 1)
-                george.reward = 1
-                # print("good", george.performance[-4000:].mean())
-                # True positive
-                if george.xor.sum() / repeats % 2 == 1:
-                    george.learn(1)
-                # True negative
+        if george.mode == "xor":
+            if count > 2 and count % 20 > 4:
+                if george.xor.sum() / repeats % 2 == george.firings[-1][-output_count:].mean().round():
+                    george.performance = np.append(george.performance, 1)
+                    george.reward = 1
+                    if george.xor.sum() / repeats % 2 == 1: # True positive
+                        george.learn(1)
+                    else: # True negative
+                        george.learn(1)
                 else:
-                    george.learn(1)
+                    george.performance = np.append(george.performance, 0)
+                    george.reward = 0
+                    if george.xor.sum() / repeats % 2 == 1: # False positive
+                        george.reinforce(-reward_amount)
+                        george.learn(0.5)
+                    else: # False negative
+                        george.reinforce(reward_amount)
+                        george.learn(0.5)
+        if george.mode == "dino":
+            if george.screen_prev is not None:
+                nov = np.abs(george.screen_cur - george.screen_prev).mean()
             else:
-                george.performance = np.append(george.performance, 0)
-                # print("bad", george.performance[-4000:].mean())
-                george.reward = 0
-                # False positive
-                # print(george.xor.sum() / repeats, george.firings[-1][-output_count:].mean().round())
-                consto = 3
-                if george.xor.sum() / repeats % 2 == 1:
-                    george.reinforce(-consto)
-                    george.learn(0.5)
-                else: # False negative
-                    george.reinforce(consto)
-                    george.learn(0.5)
-                    # print(george.firings[-1])
-                    # george.plot()
-        # if george.screen_prev is not None:
-        #     nov = np.abs(george.screen_cur - george.screen_prev).mean()
-        # else:
-        #     nov = 1
-        # if nov > 0.0001:
-        #     george.learn(1)
-        # else:
-        #     george.learn(-0.1)
+                nov = 1
+            if nov > 0.0001:
+                george.learn(1)
+            else:
+                george.learn(-0.1)
         george.decay()
         if (count % n == n - 1):
             george.visualize()
@@ -357,22 +329,19 @@ def main():
     else:
         cam = None
 
-    total = 0
     counts = 40
     total = np.zeros(counts)
     for cur in range(counts):
-        count = 0
         n = 100000
         executor = ThreadPoolExecutor(max_workers=3)
         george = Mind(executor, gamma, mode="xor")
         keyboard_press = Controller()
-        while count < 30000:
+        for count in range(30000):
             # show()
             input()
             count += 1
             if count % 20 == 0:
                 george.xor = np.tile(np.random.binomial(1, 0.5, (2,)), repeats)
-                # print(george.xor)
             processing(count)
             if george.mode is not "xor":
                 output(keyboard_press)
@@ -381,7 +350,8 @@ def main():
             #     print("Rewarded")
             #     george.reward()
         print(george.performance[-4000:].mean())
-        george.plot()
+        if george.performance[-4000:].mean() > 0.90:
+            george.plot()
         total[cur] = george.performance[-4000:].mean() > 0.8
     print(total.mean(), total.std())
 main()
