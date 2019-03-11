@@ -169,6 +169,14 @@ class Mind:
         # print(e)
         return e
 
+    def reinforce(self, alpha, past=4):
+        for i in range(past):
+            if alpha < 0:
+                self.connections[:, self.firings[-i-1].astype(bool)] /= 1 + self.gamma * np.abs(alpha)
+            else:
+                self.connections[:, self.firings[-i-1].astype(bool)] *= 1 + self.gamma * np.abs(alpha)
+
+
     def learn(self, alpha=1.0):
         # print("Alpha", alpha)
         # thought    = self.firings[:, sensory_count:-output_count]
@@ -318,16 +326,10 @@ def main():
                 # print(george.xor.sum() / repeats, george.firings[-1][-output_count:].mean().round())
                 consto = 3
                 if george.xor.sum() / repeats % 2 == 1:
-                    george.connections[:, george.firings[-1].astype(bool)] /= 1 + gamma * consto
-                    george.connections[:, george.firings[-2].astype(bool)] /= 1 + gamma * consto
-                    george.connections[:, george.firings[-3].astype(bool)] /= 1 + gamma * consto
-                    george.connections[:, george.firings[-4].astype(bool)] /= 1 + gamma * consto
+                    george.reinforce(-consto)
                     george.learn(0.5)
                 else: # False negative
-                    george.connections[:, george.firings[-1].astype(bool)] *= 1 + gamma * consto
-                    george.connections[:, george.firings[-2].astype(bool)] *= 1 + gamma * consto
-                    george.connections[:, george.firings[-3].astype(bool)] *= 1 + gamma * consto
-                    george.connections[:, george.firings[-4].astype(bool)] *= 1 + gamma * consto
+                    george.reinforce(consto)
                     george.learn(0.5)
                     # print(george.firings[-1])
                     # george.plot()
@@ -364,7 +366,7 @@ def main():
         executor = ThreadPoolExecutor(max_workers=3)
         george = Mind(executor, gamma, mode="xor")
         keyboard_press = Controller()
-        while count < 10000:
+        while count < 30000:
             # show()
             input()
             count += 1
@@ -379,7 +381,7 @@ def main():
             #     print("Rewarded")
             #     george.reward()
         print(george.performance[-4000:].mean())
-        # george.plot()
+        george.plot()
         total[cur] = george.performance[-4000:].mean() > 0.8
     print(total.mean(), total.std())
 main()
