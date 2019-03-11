@@ -131,20 +131,25 @@ class Mind:
             self.firings[:-1] = self.firings[1:]
             self.firings[-1] = firings_next
 
+    def plot(self):
+        plt.close()
+        plt.imshow(np.concatenate((self.connections[:,:,None], self.connections[:,:,None], self.plastic[:,:,None]), axis=2))
+        plt.savefig("dinoboi_" + str(self.iter_num) + ".png")
+        plt.show()
+        plt.close()
+
+        if pixels is not None:
+            plt.imshow(
+                ((self.connections * self.firings.mean(0)).sum(1) / self.firings.sum())[:video_count].reshape(pixels,
+                                                                                                              pixels))
+            plt.savefig("dinoboi_" + str(self.iter_num) + ".png")
+            plt.show()
+            plt.close()
+
     # Weaken old connections over time
     def decay(self):
-        if self.iter_num % 20000 == 0:
-            #plt.close()
-            # plt.imshow(np.concatenate((self.connections[:,:,None], self.connections[:,:,None], self.plastic[:,:,None]), axis=2))
-            # plt.savefig("dinoboi_" + str(self.iter_num) + ".png")
-            # plt.show()
-            # plt.close()
-
-            if pixels is not None:
-                plt.imshow(((self.connections * self.firings.mean(0)).sum(1) / self.firings.sum())[:video_count].reshape(pixels, pixels))
-                plt.savefig("dinoboi_" + str(self.iter_num) + ".png")
-                plt.show()
-                plt.close()
+        # if self.iter_num % 20000 == 0:
+        #     self.plot()
         self.iter_num += 1
         self.connections *= decay
 
@@ -299,28 +304,33 @@ def main():
                 george.performance = np.append(george.performance, 1)
                 george.reward = 1
                 # print("good", george.performance[-4000:].mean())
-                if george.xor.sum() % 2 == 1:
+                # True positive
+                if george.xor.sum() / repeats % 2 == 1:
                     george.learn(1)
-                    george.connections[:, george.firings[-1]] *= 1 + gamma * 1
-                    george.connections[:, george.firings[-2]] *= 1 + gamma * 1
-                    george.connections[:, george.firings[-3]] *= 1 + gamma * 1
-                    george.connections[:, george.firings[-4]] *= 1 + gamma * 1
+                # True negative
                 else:
                     george.learn(1)
             else:
                 george.performance = np.append(george.performance, 0)
                 # print("bad", george.performance[-4000:].mean())
                 george.reward = 0
+                # False positive
+                # print(george.xor.sum() / repeats, george.firings[-1][-output_count:].mean().round())
+                consto = 2
                 if george.xor.sum() / repeats % 2 == 1:
-                    # print("--")
-                    george.learn(1)
-                else:
-                    george.learn(1)
+                    # george.learn(0.1)
+                    george.connections[:, george.firings[-1].astype(bool)] /= 1 + gamma * consto
+                    george.connections[:, george.firings[-2].astype(bool)] /= 1 + gamma * consto
+                    george.connections[:, george.firings[-3].astype(bool)] /= 1 + gamma * consto
+                    george.connections[:, george.firings[-4].astype(bool)] /= 1 + gamma * consto
+                else: # False negative
+                    # george.learn(0.1)
+                    george.connections[:, george.firings[-1].astype(bool)] *= 1 + gamma * consto
+                    george.connections[:, george.firings[-2].astype(bool)] *= 1 + gamma * consto
+                    george.connections[:, george.firings[-3].astype(bool)] *= 1 + gamma * consto
+                    george.connections[:, george.firings[-4].astype(bool)] *= 1 + gamma * consto
                     # print(george.firings[-1])
-                    george.connections[:, george.firings[-1]] /= 1 + gamma * 4
-                    george.connections[:, george.firings[-2]] /= 1 + gamma * 4
-                    george.connections[:, george.firings[-3]] /= 1 + gamma * 4
-                    george.connections[:, george.firings[-4]] /= 1 + gamma * 4
+                    # george.plot()
         # if george.screen_prev is not None:
         #     nov = np.abs(george.screen_cur - george.screen_prev).mean()
         # else:
@@ -346,7 +356,7 @@ def main():
         cam = None
 
     total = 0
-    counts = 20
+    counts = 40
     total = np.zeros(counts)
     for cur in range(counts):
         count = 0
@@ -369,6 +379,7 @@ def main():
             #     print("Rewarded")
             #     george.reward()
         print(george.performance[-4000:].mean())
-        total[cur] = george.performance[-4000:].mean()
+        # george.plot()
+        total[cur] = george.performance[-4000:].mean() > 0.8
     print(total.mean(), total.std())
 main()
