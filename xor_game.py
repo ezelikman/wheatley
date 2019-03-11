@@ -16,7 +16,7 @@ dims = 3
 # percentile = 10
 percentile = 100
 
-count = 50
+count = 40
 audiosize = 0
 pixels = None
 channels = None
@@ -316,19 +316,19 @@ def main():
                 george.reward = 0
                 # False positive
                 # print(george.xor.sum() / repeats, george.firings[-1][-output_count:].mean().round())
-                consto = 2
+                consto = 3
                 if george.xor.sum() / repeats % 2 == 1:
-                    # george.learn(0.1)
                     george.connections[:, george.firings[-1].astype(bool)] /= 1 + gamma * consto
                     george.connections[:, george.firings[-2].astype(bool)] /= 1 + gamma * consto
                     george.connections[:, george.firings[-3].astype(bool)] /= 1 + gamma * consto
                     george.connections[:, george.firings[-4].astype(bool)] /= 1 + gamma * consto
+                    george.learn(0.5)
                 else: # False negative
-                    # george.learn(0.1)
                     george.connections[:, george.firings[-1].astype(bool)] *= 1 + gamma * consto
                     george.connections[:, george.firings[-2].astype(bool)] *= 1 + gamma * consto
                     george.connections[:, george.firings[-3].astype(bool)] *= 1 + gamma * consto
                     george.connections[:, george.firings[-4].astype(bool)] *= 1 + gamma * consto
+                    george.learn(0.5)
                     # print(george.firings[-1])
                     # george.plot()
         # if george.screen_prev is not None:
