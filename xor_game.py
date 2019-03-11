@@ -109,7 +109,7 @@ class Mind:
     def fire(self):
         if self.sight is not None:
             visual = self.sight.flatten()
-            print("firings", np.floor((self.firings[-1] @ self.connections) * 10)/10)
+            # print("firings", np.floor((self.firings[-1] @ self.connections) * 10)/10)
             firings_next = ((self.firings[-1] @ self.connections) > self.firings.mean(0)).astype(float)
             # firings_next = ((self.firings[-1] @ self.connections) > threshold).astype(float)
             # firings_next[:len(visual)] = visual > visual.mean()
@@ -135,10 +135,10 @@ class Mind:
     def decay(self):
         if self.iter_num % 20000 == 0:
             #plt.close()
-            plt.imshow(np.concatenate((self.connections[:,:,None], self.connections[:,:,None], self.plastic[:,:,None]), axis=2))
-            plt.savefig("dinoboi_" + str(self.iter_num) + ".png")
-            plt.show()
-            plt.close()
+            # plt.imshow(np.concatenate((self.connections[:,:,None], self.connections[:,:,None], self.plastic[:,:,None]), axis=2))
+            # plt.savefig("dinoboi_" + str(self.iter_num) + ".png")
+            # plt.show()
+            # plt.close()
 
             if pixels is not None:
                 plt.imshow(((self.connections * self.firings.mean(0)).sum(1) / self.firings.sum())[:video_count].reshape(pixels, pixels))
@@ -149,7 +149,7 @@ class Mind:
         self.connections *= decay
 
     def stdp(self, a, b):
-        print(a)
+        # print(a)
         a = np.asarray(a)[:, None]
         b = np.asarray(b)[None, :]
         c = b - (1 - a)
@@ -283,18 +283,6 @@ class Mind:
             self.sight = self.xor
 
 def main():
-    if video_stream:
-        cam = cv2.VideoCapture(0)
-        cam.set(3, 36)
-        cam.set(4, 64)
-    else:
-        cam = None
-    count = 0
-    n = 100000
-    executor = ThreadPoolExecutor(max_workers=3)
-    george = Mind(executor, gamma, mode="xor")
-    keyboard_press = Controller()
-
     def input():
         george.audiovision(cam)
 
@@ -303,36 +291,36 @@ def main():
 
     def processing(count):
         george.fire()
-        print(george.xor, george.firings[-1][-output_count:].mean(), "ITERATION: " + str(george.iter_num))
+        # print(george.xor, george.firings[-1][-output_count:].mean(), "ITERATION: " + str(george.iter_num))
         if count > 2 and count % 20 > 4:
             # if george.firings[-1][-1]:
-            print(george.xor.sum() / repeats % 2, george.firings[-1][-output_count:].mean().round(), george.xor.sum() / repeats % 2 == george.firings[-1][-output_count:].mean().round())
+            # print(george.xor.sum() / repeats % 2, george.firings[-1][-output_count:].mean().round(), george.xor.sum() / repeats % 2 == george.firings[-1][-output_count:].mean().round())
             if george.xor.sum() / repeats % 2 == george.firings[-1][-output_count:].mean().round():
                 george.performance = np.append(george.performance, 1)
                 george.reward = 1
-                print("good", george.performance[-4000:].mean())
+                # print("good", george.performance[-4000:].mean())
                 if george.xor.sum() % 2 == 1:
-                    # george.learn(1)
-                    george.connections[:, george.firings[-1]] *= 1 + gamma * 1
-                    george.connections[:, george.firings[-2]] *= 1 + gamma * 1
+                    george.learn(1)
+                    george.connections[:, george.firings[-1]] *= 1 + gamma * 2
+                    george.connections[:, george.firings[-2]] *= 1 + gamma * 2
                     george.connections[:, george.firings[-3]] *= 1 + gamma * 1
                     george.connections[:, george.firings[-4]] *= 1 + gamma * 1
                 else:
                     george.learn(1)
             else:
                 george.performance = np.append(george.performance, 0)
-                print("bad", george.performance[-4000:].mean())
+                # print("bad", george.performance[-4000:].mean())
                 george.reward = 0
                 if george.xor.sum() / repeats % 2 == 1:
-                    print("--")
+                    # print("--")
                     george.learn(1)
                 else:
-                    # george.learn(1)
-                    print(george.firings[-1])
-                    george.connections[:, george.firings[-1]] /= 1 + gamma * 5
-                    george.connections[:, george.firings[-2]] /= 1 + gamma * 5
-                    george.connections[:, george.firings[-3]] /= 1 + gamma * 5
-                    george.connections[:, george.firings[-4]] /= 1 + gamma * 5
+                    george.learn(1)
+                    # print(george.firings[-1])
+                    george.connections[:, george.firings[-1]] /= 1 + gamma * 4
+                    george.connections[:, george.firings[-2]] /= 1 + gamma * 4
+                    george.connections[:, george.firings[-3]] /= 1 + gamma * 4
+                    george.connections[:, george.firings[-4]] /= 1 + gamma * 4
         # if george.screen_prev is not None:
         #     nov = np.abs(george.screen_cur - george.screen_prev).mean()
         # else:
@@ -350,19 +338,37 @@ def main():
             plt.imshow(george.sight)
             plt.show()
 
-    while True:
-        # show()
-        input()
-        count += 1
-        if count % 20 == 0:
-            george.xor = np.tile(np.random.binomial(1, 0.5, (2,)), repeats)
-            print(george.xor)
-        processing(count)
-        if george.mode is not "xor":
-            output(keyboard_press)
-        # time.sleep(1/max_freq)
-        # if keyboard.is_pressed("space"): #if key space is pressed.You can also use right,left,up,down and others like a,b,c,etc.
-        #     print("Rewarded")
-        #     george.reward()
+    if video_stream:
+        cam = cv2.VideoCapture(0)
+        cam.set(3, 36)
+        cam.set(4, 64)
+    else:
+        cam = None
 
+    total = 0
+    counts = 20
+    total = np.zeros(counts)
+    for cur in range(counts):
+        count = 0
+        n = 100000
+        executor = ThreadPoolExecutor(max_workers=3)
+        george = Mind(executor, gamma, mode="xor")
+        keyboard_press = Controller()
+        while count < 10000:
+            # show()
+            input()
+            count += 1
+            if count % 20 == 0:
+                george.xor = np.tile(np.random.binomial(1, 0.5, (2,)), repeats)
+                # print(george.xor)
+            processing(count)
+            if george.mode is not "xor":
+                output(keyboard_press)
+            # time.sleep(1/max_freq)
+            # if keyboard.is_pressed("space"): #if key space is pressed.You can also use right,left,up,down and others like a,b,c,etc.
+            #     print("Rewarded")
+            #     george.reward()
+        print(george.performance[-4000:].mean())
+        total[cur] = george.performance[-4000:].mean()
+    print(total.mean(), total.std())
 main()
