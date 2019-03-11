@@ -301,8 +301,8 @@ def main():
                 # print("good", george.performance[-4000:].mean())
                 if george.xor.sum() % 2 == 1:
                     george.learn(1)
-                    george.connections[:, george.firings[-1]] *= 1 + gamma * 2
-                    george.connections[:, george.firings[-2]] *= 1 + gamma * 2
+                    george.connections[:, george.firings[-1]] *= 1 + gamma * 1
+                    george.connections[:, george.firings[-2]] *= 1 + gamma * 1
                     george.connections[:, george.firings[-3]] *= 1 + gamma * 1
                     george.connections[:, george.firings[-4]] *= 1 + gamma * 1
                 else:
