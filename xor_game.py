@@ -1,11 +1,10 @@
 import numpy as np
 import scipy.ndimage
-#import pyaudio
 import time
 import matplotlib
 import keyboard
-from pynput.keyboard import Key, Controller
 #import cv2
+from pynput.keyboard import Key, Controller
 import matplotlib.pyplot as plt
 from mss import mss
 from PIL import Image
@@ -14,23 +13,22 @@ from concurrent.futures import ThreadPoolExecutor
 dims = 3
 percentile = 100
 
-count = 40
-audiosize = 0
-pixels = None
-channels = None
+total_n = 40
+audio_n = 0
+base_n = 2
+reward_n = 0
+output_n = 1
+random_n = 0
 repeats = 1
-base_input = 2
-reward_size = 0
-output_count = 1
-max_freq = 50
-randomsize = 0
-video_count = base_input * repeats if pixels is None else pixels ** 2 * channels
-audvis_count = video_count + audiosize
+pixels, channels = None, None
+video_n = base_n * repeats if pixels is None else pixels ** 2 * channels
+audvis_n = video_n + audio_n
+sensory_n = audvis_n + random_n + reward_n
 
+max_freq = 50
 firing_history = 200
-sensory_count = audvis_count + randomsize + reward_size
 gamma = 0.002
-threshold = 0.5
+threshold = 0.7
 limits = 2
 reward_amount = 12
 decay = 1 - gamma / 100
@@ -40,18 +38,18 @@ exp_decay = np.power(gamma, -np.arange(firing_history - 1))[None, :, None]
 
 class Mind:
     def __init__(self, exec, init_gamma, mode=None):
-        self.neurons = np.random.uniform(size=(count, dims))  # Physical position in space
-        self.neurons[-1][-output_count:] = 0.9
+        self.neurons = np.random.uniform(size=(total_n, dims))  # Physical position in space
+        self.neurons[-1][-output_n:] = 0.9
         if pixels is not None:
             visual_map = np.mgrid[0.3:0.7:pixels * 1j, 0.3:0.7:pixels * 1j, 0.2:0.4:channels * 1j]
         else:
-            visual_map = np.mgrid[0.3:0.7:base_input * 1j, 0.3:0.7:repeats * 1j, 0.29:0.31:1j]
+            visual_map = np.mgrid[0.3:0.7:base_n * 1j, 0.3:0.7:repeats * 1j, 0.29:0.31:1j]
         visual_map = visual_map.reshape(dims, -1).T
         self.mode = mode
-        self.xor = np.zeros(video_count)
-        self.neurons[:video_count] = visual_map
+        self.xor = np.zeros(video_n)
+        self.neurons[:video_n] = visual_map
         self.dists = np.sqrt(np.mean(np.square(self.neurons[None, :, :] - self.neurons[:, None, :]), axis=-1))
-        self.firings = np.random.binomial(size=(firing_history, count), n=1, p=0.5)
+        self.firings = np.random.binomial(size=(firing_history, total_n), n=1, p=0.5)
         self.connections = (
                 (self.dists > 0) *
                 (self.dists <= np.percentile(self.dists, percentile)) *
@@ -59,15 +57,15 @@ class Mind:
         )
 
         # Disable connections coming into the sensory neurons
-        self.connections[:, :sensory_count] = 0
+        self.connections[:, :sensory_n] = 0
         # # Disable direct connections from the inputs to the outputs
-        self.connections[:sensory_count, -output_count:] = 0
+        self.connections[:sensory_n, -output_n:] = 0
         # Disable connections coming out of the sensory neurons
         # self.connections[:, -1] = 1
         # Disable intermediate loops:
-        self.connections[sensory_count:, sensory_count:-output_count] = 0
+        self.connections[sensory_n:, sensory_n:-output_n] = 0
         # # Disable connections coming out of the outputs
-        # self.connections[-output_count:, :] = 0
+        # self.connections[-output_n:, :] = 0
 
         self.plastic = np.ones_like(self.connections)
         self.plastic[self.connections == 0] = 0
@@ -80,21 +78,19 @@ class Mind:
         self.iter_num = 0
         self.reward = 0
 
-        self.accumulation = np.ones_like(self.connections[sensory_count:-output_count, sensory_count:-output_count])
-        self.accumulation *= 1 / (1 - self.acc_decay)
-        self.up = np.zeros_like(self.firings[0, sensory_count:])
-        self.upcount = 0
-        self.down = np.zeros_like(self.firings[0, sensory_count:])
-        self.downcount = 0
+        self.accumulation = np.ones_like(self.connections[sensory_n:-output_n, sensory_n:-output_n])
+        self.accumulation /= 1 - self.acc_decay
+        self.up = np.zeros_like(self.firings[0, sensory_n:])
+        self.down = np.zeros_like(self.firings[0, sensory_n:])
         self.sight = None
         self.sound = None
 
         self.performance = np.asarray([])
 
     def output(self, keyboard_to_press):
-        # if self.firings[-1][-output_count:].mean() > self.firings[:, -output_count:].mean():
-        # if np.random.binomial(1, self.firings[-1][-output_count:].mean()) > 0.5:
-        if self.firings[-1][-output_count:].mean() >= 0.5:
+        # if self.firings[-1][-output_n:].mean() > self.firings[:, -output_n:].mean():
+        # if np.random.binomial(1, self.firings[-1][-output_n:].mean()) > 0.5:
+        if self.firings[-1][-output_n:].mean() >= 0.5:
             keyboard_to_press.press(" ")
         else:
             keyboard_to_press.release(" ")
@@ -102,23 +98,19 @@ class Mind:
     def fire(self):
         if self.sight is not None:
             visual = self.sight.flatten()
-            # print("firings", np.floor((self.firings[-1] @ self.connections) * 10)/10)
             firings_next = ((self.firings[-1] @ self.connections) > self.firings.mean(0)).astype(float)
             # firings_next = ((self.firings[-1] @ self.connections) > threshold).astype(float)
             # firings_next[:len(visual)] = visual > visual.mean()
             if self.mode is "xor":
                 firings_next[:len(visual)] = visual
-                # print("a", firings_next)
             else:
                 firings_next[:len(visual)] = visual / visual.max()
-            if reward_size > 0:
-                firings_next[audvis_count:audvis_count + reward_size] = self.reward
-                # print("b", firings_next)
-            # print(firings_next)
-            if audiosize > 0:
-                firings_next[len(visual):audvis_count] = self.sound > self.sound.mean()
-            if randomsize > 0:
-                firings_next[audvis_count:sensory_count] = np.random.binomial(size=(randomsize,), n=1, p=0.8)
+            if reward_n > 0:
+                firings_next[audvis_n:audvis_n + reward_n] = self.reward
+            if audio_n > 0:
+                firings_next[len(visual):audvis_n] = self.sound > self.sound.mean()
+            if random_n > 0:
+                firings_next[audvis_n:sensory_n] = np.random.binomial(size=(random_n,), n=1, p=0.8)
             self.firings[:-1] = self.firings[1:]
             self.firings[-1] = firings_next
 
@@ -132,7 +124,7 @@ class Mind:
         if pixels is not None:
             plt.imshow(
                 ((self.connections * self.firings.mean(0)).sum(1) /
-                 self.firings.sum())[:video_count].reshape(pixels, pixels))
+                 self.firings.sum())[:video_n].reshape(pixels, pixels))
             plt.savefig("dinoboi_" + str(self.iter_num) + ".png")
             plt.show()
             plt.close()
@@ -161,7 +153,7 @@ class Mind:
 
     def learn(self, alpha=1.0):
         # print("Alpha", alpha)
-        # thought    = self.firings[:, sensory_count:-output_count]
+        # thought    = self.firings[:, sensory_n:-output_n]
         # print("STDP", self.stdp(self.firings[-2], self.firings[-1]), self.plastic)
         wow = np.multiply(np.multiply(self.stdp(self.firings[-2], self.firings[-1]), self.plastic), self.connections)
         # wow += np.multiply(np.multiply(self.stdp(self.firings[-3], self.firings[-2]), self.plastic), self.connections) * 0.3
@@ -170,13 +162,13 @@ class Mind:
         #plt.imshow(wow)
         #plt.show()
 
-        # self.accumulation += np.abs(wow[sensory_count:-output_count, sensory_count:-output_count] * self.gamma * alpha)
+        # self.accumulation += np.abs(wow[sensory_n:-output_n, sensory_n:-output_n] * self.gamma * alpha)
         # self.accumulation *= self.acc_decay
-        # subplastic = self.plastic[sensory_count:-output_count, sensory_count:-output_count]
-        # synapse_strength = np.abs(self.connections)[sensory_count:-output_count, sensory_count:-output_count]
+        # subplastic = self.plastic[sensory_n:-output_n, sensory_n:-output_n]
+        # synapse_strength = np.abs(self.connections)[sensory_n:-output_n, sensory_n:-output_n]
         # print(self.accumulation)
         # updates = (self.accumulation <= 0.0001/(1 - self.acc_decay)) * (synapse_strength <= np.sum(synapse_strength * subplastic) / subplastic.sum())
-        # self.plastic[sensory_count:-output_count, sensory_count:-output_count][updates] = 0
+        # self.plastic[sensory_n:-output_n, sensory_n:-output_n][updates] = 0
         # print("Plastic", self.plastic.mean())
         # print("Wow", wow)
         self.connections += self.connections * wow * self.gamma * alpha # * wow.sum() / 10
@@ -197,8 +189,10 @@ class Mind:
                     initimage_min = np.zeros((pixels, pixels, channels))
                     for count in range(6):
                         for _ in range(100):
-                            image_max = (1 - 1 / np.power(1.2, count)) * initimage_max + 1 / np.power(1.2, count) * np.random.uniform(size=(pixels, pixels, channels))
-                            image_min = (1 - 1 / np.power(1.2, count)) * initimage_min + 1 / np.power(1.2, count) * np.random.uniform(size=(pixels, pixels, channels))
+                            image_max = (1 - 1 / np.power(1.2, total_n)) * initimage_max + \
+                                        1 / np.power(1.2, total_n) * np.random.uniform(size=(pixels, pixels, channels))
+                            image_min = (1 - 1 / np.power(1.2, total_n)) * initimage_min + \
+                                        1 / np.power(1.2, total_n) * np.random.uniform(size=(pixels, pixels, channels))
                             fire_max = np.zeros_like(self.firings[-1])
                             fire_min = np.zeros_like(self.firings[-1])
                             for c in range(3):
@@ -258,10 +252,11 @@ class Mind:
         return visual
 
     def audiovision(self, cam, mic=None):
-        if audiosize > 0:
+        if audio_n > 0:
+            import pyaudio
             p = pyaudio.PyAudio()
-            mic = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, frames_per_buffer=audiosize)
-            data = mic.read(audiosize)
+            mic = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, frames_per_buffer=audio_n)
+            data = mic.read(audio_n)
             self.sound = np.fromstring(data, dtype=np.int16)
         else:
             self.sound = None
@@ -279,47 +274,47 @@ class Mind:
 
 def main():
     def input():
-        george.audiovision(cam)
+        wheatley.audiovision(cam)
 
     def output(keyboard):
-        george.output(keyboard)
+        wheatley.output(keyboard)
 
     def processing(count):
-        george.fire()
-        if george.mode == "xor":
-            if count > 2 and count % 20 > 4:
-                if george.xor.sum() / repeats % 2 == george.firings[-1][-output_count:].mean().round():
-                    george.performance = np.append(george.performance, 1)
-                    george.reward = 1
-                    if george.xor.sum() / repeats % 2 == 1: # True positive
-                        george.learn(1)
+        wheatley.fire()
+        if wheatley.mode == "xor":
+            if count % 20 > 4:
+                if wheatley.xor.sum() / repeats % 2 == wheatley.firings[-1][-output_n:].mean().round():
+                    wheatley.performance = np.append(wheatley.performance, 1)
+                    wheatley.reward = 1
+                    if wheatley.xor.sum() / repeats % 2 == 1: # True positive
+                        wheatley.learn(1)
                     else: # True negative
-                        george.learn(1)
+                        wheatley.learn(1)
                 else:
-                    george.performance = np.append(george.performance, 0)
-                    george.reward = 0
-                    if george.xor.sum() / repeats % 2 == 1: # False positive
-                        george.reinforce(-reward_amount)
-                        george.learn(0.5)
+                    wheatley.performance = np.append(wheatley.performance, 0)
+                    wheatley.reward = 0
+                    if wheatley.xor.sum() / repeats % 2 == 1: # False positive
+                        wheatley.reinforce(-reward_amount)
+                        wheatley.learn(0.5)
                     else: # False negative
-                        george.reinforce(reward_amount)
-                        george.learn(0.5)
-        if george.mode == "dino":
-            if george.screen_prev is not None:
-                nov = np.abs(george.screen_cur - george.screen_prev).mean()
+                        wheatley.reinforce(reward_amount)
+                        wheatley.learn(0.5)
+        if wheatley.mode == "dino":
+            if wheatley.screen_prev is not None:
+                nov = np.abs(wheatley.screen_cur - wheatley.screen_prev).mean()
             else:
                 nov = 1
             if nov > 0.0001:
-                george.learn(1)
+                wheatley.learn(1)
             else:
-                george.learn(-0.1)
-        george.decay()
+                wheatley.learn(-0.1)
+        wheatley.decay()
         if (count % n == n - 1):
-            george.visualize()
+            wheatley.visualize()
 
     def show():
-        if george.sight is not None:
-            plt.imshow(george.sight)
+        if wheatley.sight is not None:
+            plt.imshow(wheatley.sight)
             plt.show()
 
     if video_stream:
@@ -334,24 +329,24 @@ def main():
     for cur in range(counts):
         n = 100000
         executor = ThreadPoolExecutor(max_workers=3)
-        george = Mind(executor, gamma, mode="xor")
+        wheatley = Mind(executor, gamma, mode="xor")
         keyboard_press = Controller()
-        for count in range(30000):
+        for step in range(30000):
             # show()
             input()
-            count += 1
-            if count % 20 == 0:
-                george.xor = np.tile(np.random.binomial(1, 0.5, (2,)), repeats)
-            processing(count)
-            if george.mode is not "xor":
+            step += 1
+            if step % 20 == 0:
+                wheatley.xor = np.tile(np.random.binomial(1, 0.5, (2,)), repeats)
+            processing(step)
+            if wheatley.mode is not "xor":
                 output(keyboard_press)
             # time.sleep(1/max_freq)
             # if keyboard.is_pressed("space"): #if key space is pressed.You can also use right,left,up,down and others like a,b,c,etc.
             #     print("Rewarded")
-            #     george.reward()
-        print(george.performance[-4000:].mean())
-        if george.performance[-4000:].mean() > 0.90:
-            george.plot()
-        total[cur] = george.performance[-4000:].mean() > 0.8
+            #     wheatley.reward()
+        print(wheatley.performance[-4000:].mean())
+        # if wheatley.performance[-4000:].mean() > 0.90:
+        #     wheatley.plot()
+        total[cur] = wheatley.performance[-4000:].mean() > 0.8
     print(total.mean(), total.std())
 main()
