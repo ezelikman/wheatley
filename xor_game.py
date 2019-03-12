@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 dims = 3
 percentile = 100
+mode = "xor"
 
 total_n = 40
 audio_n = 0
@@ -37,7 +38,7 @@ exp_decay = np.power(gamma, -np.arange(firing_history - 1))[None, :, None]
 
 
 class Mind:
-    def __init__(self, exec, init_gamma, mode=None):
+    def __init__(self, exec, init_gamma, mode=None, long_plasticity=False):
         self.neurons = np.random.uniform(size=(total_n, dims))  # Physical position in space
         self.neurons[-1][-output_n:] = 0.9
         if pixels is not None:
@@ -78,7 +79,8 @@ class Mind:
         self.iter_num = 0
         self.reward = 0
 
-        self.accumulation = np.ones_like(self.connections[sensory_n:-output_n, sensory_n:-output_n])
+        self.long_plasticity = long_plasticity
+        self.accumulation = np.ones_like(self.connections)
         self.accumulation /= 1 - self.acc_decay
         self.up = np.zeros_like(self.firings[0, sensory_n:])
         self.down = np.zeros_like(self.firings[0, sensory_n:])
@@ -152,25 +154,16 @@ class Mind:
                 self.connections[:, self.firings[-i-1].astype(bool)] *= 1 + self.gamma * np.abs(alpha) / hist
 
     def learn(self, alpha=1.0):
-        # print("Alpha", alpha)
-        # thought    = self.firings[:, sensory_n:-output_n]
-        # print("STDP", self.stdp(self.firings[-2], self.firings[-1]), self.plastic)
         wow = np.multiply(np.multiply(self.stdp(self.firings[-2], self.firings[-1]), self.plastic), self.connections)
-        # wow += np.multiply(np.multiply(self.stdp(self.firings[-3], self.firings[-2]), self.plastic), self.connections) * 0.3
-        # wow += np.multiply(np.multiply(self.stdp(self.firings[-4], self.firings[-3]), self.plastic), self.connections) * 0.09
-        # print("WOW", np.abs(wow).mean())
-        #plt.imshow(wow)
-        #plt.show()
 
-        # self.accumulation += np.abs(wow[sensory_n:-output_n, sensory_n:-output_n] * self.gamma * alpha)
-        # self.accumulation *= self.acc_decay
-        # subplastic = self.plastic[sensory_n:-output_n, sensory_n:-output_n]
-        # synapse_strength = np.abs(self.connections)[sensory_n:-output_n, sensory_n:-output_n]
-        # print(self.accumulation)
-        # updates = (self.accumulation <= 0.0001/(1 - self.acc_decay)) * (synapse_strength <= np.sum(synapse_strength * subplastic) / subplastic.sum())
-        # self.plastic[sensory_n:-output_n, sensory_n:-output_n][updates] = 0
-        # print("Plastic", self.plastic.mean())
-        # print("Wow", wow)
+        if self.long_plasticity:
+            self.accumulation += np.abs(wow * self.gamma * alpha)
+            self.accumulation *= self.acc_decay
+            synapse_strength = np.abs(self.connections)
+            updates = (self.accumulation <= 0.01 / (1 - self.acc_decay)) * \
+                      (synapse_strength > 2 * (synapse_strength * self.plastic).sum() / self.plastic.sum())
+            self.plastic[sensory_n:, sensory_n:-output_n][updates[sensory_n:, sensory_n:-output_n].astype(bool)] = 0
+
         self.connections += self.connections * wow * self.gamma * alpha # * wow.sum() / 10
         self.connections = self.connections.clip(-limits, limits)
         # print(self.connections)
@@ -245,11 +238,13 @@ class Mind:
         sct = mss()
         im = sct.grab({"top":100 ,"left":0, "width":500, "height":230})
         rgb = Image.frombytes("RGB", im.size, im.bgra, "raw", "BGRX")
+        full = np.array(rgb)
         visual = rgb.resize(size=(pixels, pixels), resample=Image.BICUBIC)
         visual = np.array(visual)
+        grayscale = visual.mean(-1)[:,:,None]
         # plt.imshow(visual)
         # plt.show()
-        return visual
+        return full, grayscale
 
     def audiovision(self, cam, mic=None):
         if audio_n > 0:
@@ -264,9 +259,9 @@ class Mind:
         if cam is not None:
             ret, frame = cam.read()
             base = cv2.resize(frame, dsize=(pixels, pixels), interpolation=cv2.INTER_AREA)
-            self.sight = base.mean(-1)[:, :, None]
-        elif self.mode == "screen":
-            self.sight = self.screenshot()
+            self.full, self.sight = base.mean(-1)[:, :, None]
+        elif self.mode == "dino":
+            self.sight, self.sight = self.screenshot()
             self.screen_prev = self.screen_cur
             self.screen_cur = self.sight.copy()
         elif self.mode == "xor":
@@ -329,7 +324,7 @@ def main():
     for cur in range(counts):
         n = 100000
         executor = ThreadPoolExecutor(max_workers=3)
-        wheatley = Mind(executor, gamma, mode="xor")
+        wheatley = Mind(executor, gamma, mode=mode)
         keyboard_press = Controller()
         for step in range(30000):
             # show()
@@ -346,7 +341,7 @@ def main():
             #     wheatley.reward()
         print(wheatley.performance[-4000:].mean())
         # if wheatley.performance[-4000:].mean() > 0.90:
-        #     wheatley.plot()
+        wheatley.plot()
         total[cur] = wheatley.performance[-4000:].mean() > 0.8
     print(total.mean(), total.std())
 main()
