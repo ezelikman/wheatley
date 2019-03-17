@@ -19,9 +19,9 @@ video_n = base_n * repeats if pixels is None else pixels ** 2 * channels
 audvis_n = video_n + audio_n # Includes the perceptive neurons
 sensory_n = audvis_n + random_n + reward_n # Number of inputs in total
 
-init_gamma = 0.1 # How strongly to update at every learning step
+init_gamma = 0.08 # How strongly to update at every learning step
 decay = 1 - init_gamma / 100 # How much connections decay every time-step
-firing_history = 200 # How many time-steps of firing to remember, used to threshold firing
+firing_history = 2000 # How many time-steps of firing to remember, used to threshold firing
 exp_decay = np.power(init_gamma, -np.arange(firing_history - 1))[None, :, None]
 long_plasticity = False
 limits = 2 # Maximum connection strength between neurons (+-)
@@ -43,7 +43,7 @@ class Mind:
         self.connections = (
                 (self.dists > 0) *
                 (self.dists <= np.percentile(self.dists, percentile)) *
-                np.random.uniform(size=self.dists.shape, low=-limits, high=limits)
+                np.random.uniform(size=self.dists.shape, low=-1, high=1)
         )
 
         # Disable connections coming into the sensory neurons
