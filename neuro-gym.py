@@ -60,7 +60,7 @@ def main():
             action = 1 if wheatley.firings[-1][-output_n:].mean() > wheatley.firings[:, -output_n:].mean() else 0
             print("Action: " + str(action))
             observation, reward, done, info = env.step(action)
-            print("Reward: " + str(reward))
+            # print("Reward: " + str(reward))
             wheatley.sight = observation
             wheatley.reinforce(count / 100, hist=count)
             # wheatley.learn(1)
