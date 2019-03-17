@@ -19,7 +19,7 @@ video_n = base_n * repeats if pixels is None else pixels ** 2 * channels
 audvis_n = video_n + audio_n # Includes the perceptive neurons
 sensory_n = audvis_n + random_n + reward_n # Number of inputs in total
 
-init_gamma = 0.08 # How strongly to update at every learning step
+init_gamma = 0.002 # How strongly to update at every learning step
 decay = 1 - init_gamma / 100 # How much connections decay every time-step
 firing_history = 2000 # How many time-steps of firing to remember, used to threshold firing
 exp_decay = np.power(init_gamma, -np.arange(firing_history - 1))[None, :, None]
@@ -125,8 +125,8 @@ class Mind:
 
     # Weaken old connections over time
     def decay(self):
-        if self.iter_num % 1000 == 0:
-            self.plot()
+        # if self.iter_num % 1000 == 0:
+        #     self.plot()
         self.iter_num += 1
         self.connections *= decay
 
@@ -139,13 +139,13 @@ class Mind:
         return e
 
     def reinforce(self, alpha, hist=4):
-        a = np.abs(self.connections).mean()
+        # a = np.abs(self.connections).mean()
         for i in range(hist):
             if alpha < 0:
                 self.connections[:, self.firings[-i-1].astype(bool)] /= 1 + self.gamma * np.abs(alpha) / hist
             else:
                 self.connections[:, self.firings[-i-1].astype(bool)] *= 1 + self.gamma * np.abs(alpha) / hist
-        self.connections *= a / np.abs(self.connections).mean()
+        # self.connections *= a / np.abs(self.connections).mean()
         self.connections = self.connections.clip(-limits, limits)
 
     def learn(self, alpha=1.0):

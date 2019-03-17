@@ -58,7 +58,9 @@ def main():
         if wheatley.mode == "gym":
             # print(wheatley.firings[-1][-output_n:].mean(), wheatley.firings[:, -output_n:].mean())
             action = 1 if wheatley.firings[-1][-output_n:].mean() > wheatley.firings[:, -output_n:].mean() else 0
+            #action = np.random.binomial(1, 0.5)
             print("Action: " + str(action))
+
             observation, reward, done, info = env.step(action)
             # print("Reward: " + str(reward))
             wheatley.sight = observation
@@ -102,7 +104,7 @@ def main():
         n = 100000
         keyboard_press = Controller()
         for step in range(1000000):
-            # env.render()
+            env.render()
             # print(observation)
             # show()
             input()
