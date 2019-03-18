@@ -58,24 +58,23 @@ def main():
         if wheatley.mode == "gym":
             # print(wheatley.firings[-1][-output_n:].mean(), wheatley.firings[:, -output_n:].mean())
             #action = 1 if wheatley.firings[-1][-output_n:].mean() > wheatley.firings[:, -output_n:].mean() else 0
-            print(np.multiply(np.multiply(
-                wheatley.stdp(wheatley.firings[-2], wheatley.firings[-1]), wheatley.plastic
-            ), wheatley.connections))
             nov = np.abs(np.multiply(np.multiply(
                 wheatley.stdp(wheatley.firings[-2], wheatley.firings[-1]), wheatley.plastic
             ), wheatley.connections))
             print("Nov", np.abs(nov).mean())
-            action = ((wheatley.firings[-2] @ wheatley.connections)[-1])
+            #action = ((wheatley.firings[-2] @ wheatley.connections)[-1]).round()
+            action = wheatley.firings[-1][-output_n:].mean()
+            action = 2 if action > 2/3. else (0 if action > 1/3. else 1)
             #action = np.random.binomial(1, 0.5)
             print("Action: " + str(action))
 
-            observation, reward, done, info = env.step([action])
-            reward += 10
+            observation, reward, done, info = env.step(action)
+            # reward += 10
             print("Reward: " + str(reward))
             wheatley.sight = 2 * (-0.5 + (observation - env.observation_space.low) /
                         (env.observation_space.high - env.observation_space.low))
             #wheatley.reinforce(count / 100, hist=count)
-            wheatley.reinforce(reward/10, hist=50)
+            wheatley.reinforce(np.abs(nov).mean(), hist=50)
             wheatley.learn(0.1)
             # if done:
             #     if count < 200:
@@ -107,7 +106,7 @@ def main():
     threader = ThreadPoolExecutor(max_workers=3)
 
     if mode == "gym":
-        env = gym.make('Pendulum-v0')
+        env = gym.make('MountainCar-v0')
         wheatley = Mind(threader, mode=mode, base_n=len(env.observation_space.high))
     else:
         wheatley = Mind(threader, mode=mode, base_n=5)

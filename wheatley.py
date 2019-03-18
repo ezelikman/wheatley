@@ -4,20 +4,13 @@ from PIL import Image
 
 dims = 3 # Number of dimensions of the neuron space
 percentile = 100  # What portion of neurons (by distance) should a neuron connect to
-video_stream = False # Should video be used?
-
 
 total_n = 50 # Number of total neurons
 audio_n = 0 # Number of audio neurons
-base_n = 4 # Number of generated input dimensions (e.g. xor has 2)
 reward_n = 0  # Number of reward-perceiving neurons
-output_n = 1  # Number of output neurons (averaged to determine output)
-random_n, random_p = 0, 0.8  # Number and likelihood of randomly firing neurons
+output_n = 10  # Number of output neurons (averaged to determine output)
+random_n, random_p = 10, 0.8  # Number and likelihood of randomly firing neurons
 repeats = 1  # Number of times to repeat input
-pixels, channels = (10, 1) if video_stream else (None, None)  # Dimensions of visual input
-video_n = base_n * repeats if pixels is None else pixels ** 2 * channels
-audvis_n = video_n + audio_n # Includes the perceptive neurons
-sensory_n = audvis_n + random_n + reward_n # Number of inputs in total
 
 init_gamma = 0.002 # How strongly to update at every learning step
 decay = 1 - init_gamma / 100 # How much connections decay every time-step
@@ -27,19 +20,26 @@ long_plasticity = False
 limits = 2 # Maximum connection strength between neurons (+-)
 
 class Mind:
-    def __init__(self, threader, mode=None, long_plasticity=False):
+    def __init__(self, threader, mode=None, long_plasticity=False, base_n=4, video_stream=False):
+        self.video_stream = video_stream
+        pixels, channels = (10, 1) if video_stream else (None, None)  # Dimensions of visual input
+        self.base_n = base_n
+        self.video_n = self.base_n * repeats if pixels is None else pixels ** 2 * channels
+        self.audvis_n = self.video_n + audio_n # Includes the perceptive neurons
+        self.sensory_n = self.audvis_n + random_n + reward_n # Number of inputs in total
+
         self.neurons = np.random.uniform(size=(total_n, dims))  # Physical position in space
         self.neurons[-1][-output_n:] = 0.9
         if pixels is not None:
             visual_map = np.mgrid[0.3:0.7:pixels * 1j, 0.3:0.7:pixels * 1j, 0.2:0.4:channels * 1j]
         else:
-            visual_map = np.mgrid[0.3:0.7:base_n * 1j, 0.3:0.7:repeats * 1j, 0.29:0.31:1j]
+            visual_map = np.mgrid[0.3:0.7:self.base_n * 1j, 0.3:0.7:repeats * 1j, 0.29:0.31:1j]
         visual_map = visual_map.reshape(dims, -1).T
         self.mode = mode
-        self.xor = np.zeros(video_n)
-        self.neurons[:video_n] = visual_map
+        self.xor = np.zeros(self.video_n)
+        self.neurons[:self.video_n] = visual_map
         self.dists = np.sqrt(np.mean(np.square(self.neurons[None, :, :] - self.neurons[:, None, :]), axis=-1))
-        self.firings = np.random.binomial(size=(firing_history, total_n), n=1, p=0.5)
+        self.firings = np.random.binomial(size=(firing_history, total_n), n=1, p=0.5).astype(float)
         self.connections = (
                 (self.dists > 0) *
                 (self.dists <= np.percentile(self.dists, percentile)) *
@@ -47,11 +47,11 @@ class Mind:
         )
 
         # Disable connections coming into the sensory neurons
-        self.connections[:, :sensory_n] = 0
+        self.connections[:, :self.sensory_n] = 0
         # # Disable direct connections from the inputs to the outputs
-        self.connections[:sensory_n, -output_n:] = 0
+        self.connections[:self.sensory_n, -output_n:] = 0
         # Disable intermediate loops:
-        self.connections[sensory_n:, sensory_n:-output_n] = 0
+        self.connections[self.sensory_n:, self.sensory_n:-output_n] = 0
         # # Disable connections coming out of the outputs
         # self.connections[-output_n:, :] = 0
 
@@ -71,8 +71,8 @@ class Mind:
         # How much has a neuron been updated over some number of time-steps
         self.accumulation = np.ones_like(self.connections)
         self.accumulation /= 1 - self.acc_decay
-        self.up = np.zeros_like(self.firings[0, sensory_n:])
-        self.down = np.zeros_like(self.firings[0, sensory_n:])
+        self.up = np.zeros_like(self.firings[0, self.sensory_n:])
+        self.down = np.zeros_like(self.firings[0, self.sensory_n:])
         self.sight = None
         self.sound = None
 
@@ -98,11 +98,11 @@ class Mind:
             else:
                 firings_next[:len(visual_input)] = visual_input / visual_input.max()
             if reward_n > 0:
-                firings_next[audvis_n:audvis_n + reward_n] = self.reward
+                firings_next[self.audvis_n:self.audvis_n + reward_n] = self.reward
             if audio_n > 0:
-                firings_next[len(visual_input):audvis_n] = self.sound > self.sound.mean()
+                firings_next[len(visual_input):self.audvis_n] = self.sound > self.sound.mean()
             if random_n > 0:
-                firings_next[audvis_n:sensory_n] = np.random.binomial(size=(random_n,), n=1, p=random_p)
+                firings_next[self.audvis_n:self.sensory_n] = np.random.binomial(size=(random_n,), n=1, p=random_p)
             # Update history
             self.firings[:-1] = self.firings[1:]
             self.firings[-1] = firings_next
@@ -118,7 +118,7 @@ class Mind:
         if pixels is not None:
             plt.imshow(
                 ((self.connections * self.firings.mean(0)).sum(1) /
-                 self.firings.sum())[:video_n].reshape(pixels, pixels))
+                 self.firings.sum())[:self.video_n].reshape(pixels, pixels))
             plt.savefig("dinoboi_" + str(self.iter_num) + ".png")
             plt.show()
             plt.close()
@@ -134,18 +134,18 @@ class Mind:
         a = np.asarray(a)[:, None]
         b = np.asarray(b)[None, :]
         c = b - (1 - a)
-        d = a * b
-        e = np.multiply(c, d | d.T)
+        d = (a * b).round().astype(int)
+        e = np.multiply(c, (d | d.T).astype(float))
         return e
 
     def reinforce(self, alpha, hist=4):
-        # a = np.abs(self.connections).mean()
+        a = np.abs(self.connections).mean()
         for i in range(hist):
             if alpha < 0:
                 self.connections[:, self.firings[-i-1].astype(bool)] /= 1 + self.gamma * np.abs(alpha) / hist
             else:
                 self.connections[:, self.firings[-i-1].astype(bool)] *= 1 + self.gamma * np.abs(alpha) / hist
-        # self.connections *= a / np.abs(self.connections).mean()
+        self.connections *= a / np.abs(self.connections).mean()
         self.connections = self.connections.clip(-limits, limits)
 
     def learn(self, alpha=1.0):
@@ -157,7 +157,7 @@ class Mind:
             synapse_strength = np.abs(self.connections)
             updates = (self.accumulation <= 0.01 / (1 - self.acc_decay)) * \
                       (synapse_strength > 2 * (synapse_strength * self.plastic).sum() / self.plastic.sum())
-            self.plastic[sensory_n:, sensory_n:-output_n][updates[sensory_n:, sensory_n:-output_n].astype(bool)] = 0
+            self.plastic[self.sensory_n:, self.sensory_n:-output_n][updates[self.sensory_n:, self.sensory_n:-output_n].astype(bool)] = 0
 
         self.connections += self.connections * wow * self.gamma * alpha # * wow.sum() / 10
         self.connections = self.connections.clip(-limits, limits)
