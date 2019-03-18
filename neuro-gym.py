@@ -12,9 +12,9 @@ from concurrent.futures import ThreadPoolExecutor
 from wheatley import init_gamma, firing_history, repeats, output_n, Mind
 
 mode = "gym" # What game are you using
-env_name = 'MountainCar-v0'
+# env_name = 'MountainCar-v0'
 # env_name = 'CartPole-v0'
-# env_name = 'Pendulum-v0'
+env_name = 'Pendulum-v0'
 
 max_freq = 50  # Maximum per neuron firing frequency per second, less processor-dependent
 reward_amount = 12  # How much to update the connections in response to global rewards
@@ -76,6 +76,7 @@ def main():
             wheatley.sight = 2 * (-0.5 + (observation - env.observation_space.low) /
                                   (env.observation_space.high - env.observation_space.low))
             wheatley.total_reward += reward
+            # print(reward)
 
             if env_name == 'CartPole-v0':
                 if done:
@@ -101,7 +102,8 @@ def main():
 
             if env_name == 'Pendulum-v0':
                 reward += 10
-                wheatley.reinforce(reward / 10, hist=50)
+                wheatley.reinforce(reward, hist=count)
+                # wheatley.learn(0.2)
                 if done:
                     return wheatley.total_reward
 
@@ -117,7 +119,7 @@ def main():
 
 
 
-    counts = 50
+    counts = 200
     total = np.zeros(counts)
     threader = ThreadPoolExecutor(max_workers=3)
 
