@@ -5,22 +5,21 @@ from PIL import Image
 dims = 3 # Number of dimensions of the neuron space
 percentile = 100  # What portion of neurons (by distance) should a neuron connect to
 
-total_n = 50 # Number of total neurons
+total_n = 100 # Number of total neurons
 audio_n = 0 # Number of audio neurons
 reward_n = 0  # Number of reward-perceiving neurons
-output_n = 20  # Number of output neurons (averaged to determine output)
+output_n = 10  # Number of output neurons (averaged to determine output)
 random_n, random_p = 2, 1  # Number and likelihood of randomly firing neurons
 repeats = 1  # Number of times to repeat input
 
-init_gamma = 0.002 # How strongly to update at every learning step
-decay = 1 - init_gamma / 100 # How much connections decay every time-step
 firing_history = 2000 # How many time-steps of firing to remember, used to threshold firing
-exp_decay = np.power(init_gamma, -np.arange(firing_history - 1))[None, :, None]
+# exp_decay = np.power(init_gamma, -np.arange(firing_history - 1))[None, :, None]
 long_plasticity = False
 limits = 2 # Maximum connection strength between neurons (+-)
 
 class Mind:
-    def __init__(self, threader, mode=None, long_plasticity=False, base_n=4, video_stream=False):
+    def __init__(self, threader, mode=None, long_plasticity=False, base_n=4, gamma=0.002, video_stream=False):
+
         self.video_stream = video_stream
         pixels, channels = (10, 1) if video_stream else (None, None)  # Dimensions of visual input
         self.base_n = base_n
@@ -57,9 +56,11 @@ class Mind:
 
         self.plastic = np.ones_like(self.connections)
         self.plastic[self.connections == 0] = 0
-        self.gamma = init_gamma
+        self.init_gamma = gamma
+        self.gamma = gamma
         self.threader = threader
         #self.lr_decay = 1 - self.gamma / 100
+        self.con_decay = 1 - self.gamma / 100 # How much connections decay every time-step
         self.lr_decay = 0.99
         self.acc_decay = 1 - self.gamma
         self.screen_cur = None
@@ -74,6 +75,7 @@ class Mind:
         self.accumulation /= 1 - self.acc_decay
         self.up = np.zeros_like(self.firings[0, self.sensory_n:])
         self.down = np.zeros_like(self.firings[0, self.sensory_n:])
+        self.expected_reward = None
         self.sight = None
         self.sound = None
 
@@ -129,7 +131,7 @@ class Mind:
         # if self.iter_num % 1000 == 0:
         #     self.plot()
         self.iter_num += 1
-        self.connections *= decay
+        self.connections *= self.con_decay
 
     def stdp(self, a, b):
         # print("STDP", a, b)
