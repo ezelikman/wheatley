@@ -43,7 +43,8 @@ def main():
                     else: # False negative
                         wheatley.reinforce(reward_amount)
                         wheatley.learn(0.5)
-
+            if count % 100 == 0:
+                wheatley.plot()
         if wheatley.mode == "dino":
             if wheatley.screen_prev is not None:
                 nov = np.abs(wheatley.screen_cur - wheatley.screen_prev).mean()

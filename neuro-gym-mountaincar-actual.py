@@ -9,7 +9,7 @@ from pynput.keyboard import Key, Controller
 import matplotlib.pyplot as plt
 from mss import mss
 from concurrent.futures import ThreadPoolExecutor
-from wheatley import firing_history, repeats, output_n, Mind
+from wheatley import init_gamma, firing_history, repeats, output_n, Mind
 
 mode = "gym" # What game are a you using
 
@@ -61,24 +61,23 @@ def main():
             nov = np.abs(np.multiply(np.multiply(
                 wheatley.stdp(wheatley.firings[-2], wheatley.firings[-1]), wheatley.plastic
             ), wheatley.connections))
-            print("Nov", np.abs(nov).mean())
+            # print("Nov", np.abs(nov).mean())
             action = ((wheatley.firings[-2] @ wheatley.connections)[-1])
-            print("Action_in", action)
+            # print("Action_in", action)
             # action = wheatley.firings[-1][-output_n:].mean()
-            action = 2 if action > 0.5 else 1
+
+            action = 2 if wheatley.firings[-1][-output_n:].mean() > wheatley.firings[:, -output_n:].mean() else 0
             #action = np.random.binomial(1, 0.5)
-            print("Action: " + str(action))
+            # print("Action: " + str(action))
 
             observation, reward, done, info = env.step(action)
             # reward += 10
-            print("Reward: " + str(reward))
-            print(env.observation_space.low)
-            print(env.observation_space.high)
+            # print("Reward: " + str(reward))
             wheatley.sight = 2 * (-0.5 + (observation - env.observation_space.low) /
                         (env.observation_space.high - env.observation_space.low))
-            print("SIGHT", wheatley.sight)
+            # print("SIGHT", wheatley.sight)
             #wheatley.reinforce(count / 100, hist=count)
-            wheatley.reinforce(np.abs(nov).mean(), hist=50)
+            wheatley.reinforce(np.abs(nov).mean() * wheatley.gamma / init_gamma, hist=50)
             wheatley.learn(0.1)
             # if done:
             #     if count < 200:
@@ -87,9 +86,15 @@ def main():
             #         wheatley.reinforce(-10 / count, hist=count)
             #     else:
             #         wheatley.reinforce(1)
-            if done:
-                print("Episode finished after {} timesteps".format(count+1))
-                return True
+            #if done:
+                #print("Episode finished after {} timesteps".format(count+1))
+                #return True
+            if observation[0] >= 0.5:
+                wheatley.reinforce(1000/count, hist=count)
+                return count
+            if count == 1000:
+                wheatley.reinforce(-5, hist=count)
+                return count
 
         wheatley.decay()
         if (count % n == n - 1):
@@ -103,7 +108,7 @@ def main():
 
 
 
-    counts = 100
+    counts = 50
     total = np.zeros(counts)
     threader = ThreadPoolExecutor(max_workers=3)
 
@@ -120,12 +125,13 @@ def main():
     else:
         cam = None
 
+    iter_counts = []
     for cur in range(counts):
         observation = env.reset()
         n = 100000
         keyboard_press = Controller()
         for step in range(1000000):
-            env.render()
+            # env.render()
             # print(observation)
             # show()
             input()
@@ -133,10 +139,13 @@ def main():
                 wheatley.xor = np.tile(np.random.binomial(1, 0.5, (2,)), repeats)
             done = processing(step, env)
             # time.sleep(0.1)
-            if done:
+            if done != None:
+                print(done)
+                iter_counts.append(done)
                 break
             if wheatley.mode == "dino":
                 output(keyboard_press)
+    print(iter_counts)
             # time.sleep(1/max_freq)
     print(total.mean(), total.std())
 

@@ -8,7 +8,7 @@ percentile = 100  # What portion of neurons (by distance) should a neuron connec
 total_n = 50 # Number of total neurons
 audio_n = 0 # Number of audio neurons
 reward_n = 0  # Number of reward-perceiving neurons
-output_n = 1  # Number of output neurons (averaged to determine output)
+output_n = 20  # Number of output neurons (averaged to determine output)
 random_n, random_p = 2, 1  # Number and likelihood of randomly firing neurons
 repeats = 1  # Number of times to repeat input
 
@@ -59,7 +59,8 @@ class Mind:
         self.plastic[self.connections == 0] = 0
         self.gamma = init_gamma
         self.threader = threader
-        self.lr_decay = 1 - self.gamma / 100
+        #self.lr_decay = 1 - self.gamma / 100
+        self.lr_decay = 0.99
         self.acc_decay = 1 - self.gamma
         self.screen_cur = None
         self.screen_prev = None
