@@ -9,7 +9,7 @@ from pynput.keyboard import Key, Controller
 import matplotlib.pyplot as plt
 from mss import mss
 from concurrent.futures import ThreadPoolExecutor
-from wheatley import init_gamma, firing_history, repeats, output_n, Mind
+from wheatley import firing_history, repeats, output_n, Mind
 
 mode = "gym" # What game are you using
 # env_name = 'MountainCar-v0'
@@ -63,8 +63,9 @@ def main():
                 wheatley.stdp(wheatley.firings[-2], wheatley.firings[-1]), wheatley.plastic
             ), wheatley.connections))
             # print("Nov", np.abs(nov).mean())
-            action = ((wheatley.firings[-2] @ wheatley.connections)[-1])
 
+            if env_name == 'Pendulum-v0':
+                action = ((wheatley.firings[-2] @ wheatley.connections)[-output_n:].mean())
             if env_name == 'MountainCar-v0':
                 action = 2 if wheatley.firings[-1][-output_n:].mean() > wheatley.firings[:, -output_n:].mean() else 0
             if env_name == 'CartPole-v0':
@@ -88,10 +89,10 @@ def main():
                         wheatley.reinforce(1)
                 if done:
                     print("Episode finished after {} timesteps".format(count+1))
-                    return True
+                    return count
 
             if env_name == 'MountainCar-v0':
-                wheatley.reinforce(np.abs(nov).mean() * wheatley.gamma / init_gamma, hist=50)
+                wheatley.reinforce(np.abs(nov).mean() * wheatley.gamma / wheatley.init_gamma, hist=50)
                 wheatley.learn(0.1)
                 if observation[0] >= 0.5:
                     wheatley.reinforce(1000/count, hist=count)
@@ -101,8 +102,10 @@ def main():
                     return count
 
             if env_name == 'Pendulum-v0':
+                if wheatley.expected_reward == None:
+                    wheatley.expected_reward = reward
                 wheatley.reinforce(reward - wheatley.expected_reward, hist=count)
-                wheatley.expected_reward = 0.9 * wheatley.expected_reward + 0.1 * reward
+                wheatley.expected_reward = 0.999 * wheatley.expected_reward + 0.001 * reward
                 # wheatley.learn(0.2)
                 if done:
                     return wheatley.total_reward
@@ -138,7 +141,6 @@ def main():
         cam = None
 
     iter_counts = []
-    wheatley.expected_reward = 0
     for cur in range(counts):
         observation = env.reset()
         wheatley.total_reward = 0
