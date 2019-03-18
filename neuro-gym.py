@@ -101,8 +101,8 @@ def main():
                     return count
 
             if env_name == 'Pendulum-v0':
-                reward += 10
-                wheatley.reinforce(reward, hist=count)
+                wheatley.reinforce(reward - wheatley.expected_reward, hist=count)
+                wheatley.expected_reward = 0.9 * wheatley.expected_reward + 0.1 * reward
                 # wheatley.learn(0.2)
                 if done:
                     return wheatley.total_reward
@@ -138,13 +138,15 @@ def main():
         cam = None
 
     iter_counts = []
+    wheatley.expected_reward = 0
     for cur in range(counts):
         observation = env.reset()
         wheatley.total_reward = 0
         n = 100000
         keyboard_press = Controller()
         for step in range(1000000):
-            # env.render()
+            if cur % 40 == 0:
+                env.render()
             # print(observation)
             # show()
             input()
