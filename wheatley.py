@@ -8,8 +8,8 @@ percentile = 100  # What portion of neurons (by distance) should a neuron connec
 total_n = 50 # Number of total neurons
 audio_n = 0 # Number of audio neurons
 reward_n = 0  # Number of reward-perceiving neurons
-output_n = 10  # Number of output neurons (averaged to determine output)
-random_n, random_p = 10, 0.8  # Number and likelihood of randomly firing neurons
+output_n = 1  # Number of output neurons (averaged to determine output)
+random_n, random_p = 2, 1  # Number and likelihood of randomly firing neurons
 repeats = 1  # Number of times to repeat input
 
 init_gamma = 0.002 # How strongly to update at every learning step
@@ -93,10 +93,10 @@ class Mind:
             firings_next = ((self.firings[-1] @ self.connections) > self.firings.mean(0)).astype(float)
             # firings_next = ((self.firings[-1] @ self.connections) > threshold).astype(float)
             # firings_next[:len(visual)] = visual > visual.mean()
-            if self.mode is "xor":
-                firings_next[:len(visual_input)] = visual_input
-            else:
+            if self.mode is "dino" or self.mode is "cam":
                 firings_next[:len(visual_input)] = visual_input / visual_input.max()
+            else:
+                firings_next[:len(visual_input)] = visual_input
             if reward_n > 0:
                 firings_next[self.audvis_n:self.audvis_n + reward_n] = self.reward
             if audio_n > 0:
@@ -131,6 +131,7 @@ class Mind:
         self.connections *= decay
 
     def stdp(self, a, b):
+        # print("STDP", a, b)
         a = np.asarray(a)[:, None]
         b = np.asarray(b)[None, :]
         c = b - (1 - a)

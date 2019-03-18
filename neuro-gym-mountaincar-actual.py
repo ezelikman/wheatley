@@ -62,17 +62,21 @@ def main():
                 wheatley.stdp(wheatley.firings[-2], wheatley.firings[-1]), wheatley.plastic
             ), wheatley.connections))
             print("Nov", np.abs(nov).mean())
-            #action = ((wheatley.firings[-2] @ wheatley.connections)[-1]).round()
-            action = wheatley.firings[-1][-output_n:].mean()
-            action = 2 if action > 2/3. else (0 if action > 1/3. else 1)
+            action = ((wheatley.firings[-2] @ wheatley.connections)[-1])
+            print("Action_in", action)
+            # action = wheatley.firings[-1][-output_n:].mean()
+            action = 2 if action > 0.5 else 1
             #action = np.random.binomial(1, 0.5)
             print("Action: " + str(action))
 
             observation, reward, done, info = env.step(action)
             # reward += 10
             print("Reward: " + str(reward))
+            print(env.observation_space.low)
+            print(env.observation_space.high)
             wheatley.sight = 2 * (-0.5 + (observation - env.observation_space.low) /
                         (env.observation_space.high - env.observation_space.low))
+            print("SIGHT", wheatley.sight)
             #wheatley.reinforce(count / 100, hist=count)
             wheatley.reinforce(np.abs(nov).mean(), hist=50)
             wheatley.learn(0.1)
@@ -83,8 +87,6 @@ def main():
             #         wheatley.reinforce(-10 / count, hist=count)
             #     else:
             #         wheatley.reinforce(1)
-            #     print("Episode finished after {} timesteps".format(count+1))
-            #     return True
             if done:
                 print("Episode finished after {} timesteps".format(count+1))
                 return True
