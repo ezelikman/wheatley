@@ -5,10 +5,10 @@ from PIL import Image
 dims = 3 # Number of dimensions of the neuron space
 percentile = 100  # What portion of neurons (by distance) should a neuron connect to
 
-total_n = 100 # Number of total neurons
+total_n = 50 # Number of total neurons
 audio_n = 0 # Number of audio neurons
 reward_n = 0  # Number of reward-perceiving neurons
-output_n = 10  # Number of output neurons (averaged to determine output)
+output_n = 25  # Number of output neurons (averaged to determine output)
 random_n, random_p = 2, 1  # Number and likelihood of randomly firing neurons
 repeats = 1  # Number of times to repeat input
 
@@ -18,7 +18,7 @@ long_plasticity = False
 limits = 2 # Maximum connection strength between neurons (+-)
 
 class Mind:
-    def __init__(self, threader, mode=None, long_plasticity=False, base_n=4, gamma=0.5, video_stream=False):
+    def __init__(self, threader, mode=None, long_plasticity=False, base_n=4, gamma=0.002, video_stream=False):
 
         self.video_stream = video_stream
         pixels, channels = (10, 1) if video_stream else (None, None)  # Dimensions of visual input
@@ -75,7 +75,6 @@ class Mind:
         self.accumulation /= 1 - self.acc_decay
         self.up = np.zeros_like(self.firings[0, self.sensory_n:])
         self.down = np.zeros_like(self.firings[0, self.sensory_n:])
-        self.expected_reward = None
         self.sight = None
         self.sound = None
 
@@ -146,11 +145,9 @@ class Mind:
         a = np.abs(self.connections).mean()
         for i in range(hist):
             if alpha < 0:
-                self.connections[:, self.firings[-i-1].astype(bool)] -= self.gamma*np.abs(alpha)
-                #self.connections[:, self.firings[-i-1].astype(bool)] /= 1 + self.gamma * np.abs(alpha) 
+                self.connections[:, self.firings[-i-1].astype(bool)] /= 1 + self.gamma * np.abs(alpha) / hist
             else:
-                self.connections[:, self.firings[-i-1].astype(bool)] += self.gamma*np.abs(alpha)
-                #self.connections[:, self.firings[-i-1].astype(bool)] *= 1 + self.gamma * np.abs(alpha)/10
+                self.connections[:, self.firings[-i-1].astype(bool)] *= 1 + self.gamma * np.abs(alpha) / hist
         self.connections *= a / np.abs(self.connections).mean()
         self.connections = self.connections.clip(-limits, limits)
 
