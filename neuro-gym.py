@@ -1,7 +1,8 @@
+import matplotlib
+matplotlib.use('TkAgg')
 import numpy as np
 import scipy.ndimage
 import time
-import matplotlib
 import keyboard
 import gym
 #import cv2
@@ -101,18 +102,23 @@ def main():
                     wheatley.reinforce(-5, hist=count)
                     return count
 
+            # if env_name == 'Pendulum-v0':
+            #     if wheatley.expected_reward == None:
+            #         wheatley.expected_reward = reward
+            #     wheatley.reinforce(reward - wheatley.expected_reward, hist=count)
+            #     wheatley.expected_reward = 0.999 * wheatley.expected_reward + 0.001 * reward
+            #     # wheatley.learn(0.2)
+            #     if done:
+            #         return wheatley.total_reward
             if env_name == 'Pendulum-v0':
-                if wheatley.expected_reward == None:
-                    wheatley.expected_reward = reward
-                wheatley.reinforce(reward - wheatley.expected_reward, hist=count)
-                wheatley.expected_reward = 0.999 * wheatley.expected_reward + 0.001 * reward
-                # wheatley.learn(0.2)
+                wheatley.reinforce(reward - wheatley.total_reward/(count+1), hist=1)
                 if done:
                     return wheatley.total_reward
 
         wheatley.decay()
         if (count % n == n - 1):
             wheatley.visualize()
+        return None
 
     def show():
         if wheatley.sight is not None:
@@ -147,8 +153,8 @@ def main():
         n = 100000
         keyboard_press = Controller()
         for step in range(1000000):
-            if cur % 40 == 0:
-                env.render()
+            #if cur % 40 == 0:
+            #   env.render()
             # print(observation)
             # show()
             input()
@@ -157,12 +163,14 @@ def main():
             done = processing(step, env)
             # time.sleep(0.1)
             if done != None:
-                print(done)
                 iter_counts.append(done)
                 break
             if wheatley.mode == "dino":
                 output(keyboard_press)
     print(iter_counts)
+    plt.plot(iter_counts, "o")
+    plt.ylim(-2000, -200) 
+    plt.show()
             # time.sleep(1/max_freq)
     print(total.mean(), total.std())
 

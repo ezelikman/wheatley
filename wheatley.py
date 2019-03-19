@@ -18,7 +18,7 @@ long_plasticity = False
 limits = 2 # Maximum connection strength between neurons (+-)
 
 class Mind:
-    def __init__(self, threader, mode=None, long_plasticity=False, base_n=4, gamma=0.002, video_stream=False):
+    def __init__(self, threader, mode=None, long_plasticity=False, base_n=4, gamma=0.5, video_stream=False):
 
         self.video_stream = video_stream
         pixels, channels = (10, 1) if video_stream else (None, None)  # Dimensions of visual input
@@ -146,9 +146,11 @@ class Mind:
         a = np.abs(self.connections).mean()
         for i in range(hist):
             if alpha < 0:
-                self.connections[:, self.firings[-i-1].astype(bool)] /= 1 + self.gamma * np.abs(alpha) / hist
+                self.connections[:, self.firings[-i-1].astype(bool)] -= self.gamma*np.abs(alpha)
+                #self.connections[:, self.firings[-i-1].astype(bool)] /= 1 + self.gamma * np.abs(alpha) 
             else:
-                self.connections[:, self.firings[-i-1].astype(bool)] *= 1 + self.gamma * np.abs(alpha) / hist
+                self.connections[:, self.firings[-i-1].astype(bool)] += self.gamma*np.abs(alpha)
+                #self.connections[:, self.firings[-i-1].astype(bool)] *= 1 + self.gamma * np.abs(alpha)/10
         self.connections *= a / np.abs(self.connections).mean()
         self.connections = self.connections.clip(-limits, limits)
 
