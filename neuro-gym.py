@@ -1,8 +1,7 @@
-import matplotlib
-matplotlib.use('TkAgg')
 import numpy as np
 import scipy.ndimage
 import time
+import matplotlib
 import keyboard
 import gym
 #import cv2
@@ -14,8 +13,9 @@ from wheatley import firing_history, repeats, output_n, Mind
 
 mode = "gym" # What game are you using
 # env_name = 'MountainCar-v0'
+env_name = 'MountainCarContinuous-v0'
 # env_name = 'CartPole-v0'
-env_name = 'Pendulum-v0'
+# env_name = 'Pendulum-v0'
 
 max_freq = 50  # Maximum per neuron firing frequency per second, less processor-dependent
 reward_amount = 12  # How much to update the connections in response to global rewards
@@ -66,9 +66,13 @@ def main():
             # print("Nov", np.abs(nov).mean())
 
             if env_name == 'Pendulum-v0':
-                action = ((wheatley.firings[-2] @ wheatley.connections)[-output_n:].mean())
+                # action = ((wheatley.firings[-2] @ wheatley.connections)[-output_n:].mean())
+                action = -1.5 if wheatley.firings[-1][-output_n:].mean() > wheatley.firings[:, -output_n:].mean() else 1.5
             if env_name == 'MountainCar-v0':
                 action = 2 if wheatley.firings[-1][-output_n:].mean() > wheatley.firings[:, -output_n:].mean() else 0
+            if env_name == 'MountainCarContinuous-v0':
+                # action = 2 * ((wheatley.firings[-2] @ wheatley.connections)[-output_n:].mean())
+                action = 2 * (-0.5 + (wheatley.firings[-1][-output_n:].mean(0) > wheatley.firings[:, -output_n:].mean(0)).mean())
             if env_name == 'CartPole-v0':
                 action = 1 if wheatley.firings[-1][-output_n:].mean() > wheatley.firings[:, -output_n:].mean() else 0
 
@@ -102,23 +106,40 @@ def main():
                     wheatley.reinforce(-5, hist=count)
                     return count
 
+            if env_name == 'MountainCarContinuous-v0':
+                wheatley.reinforce(np.abs(nov).mean() * wheatley.gamma / wheatley.init_gamma, hist=50)
+                wheatley.learn(0.1)
+                if observation[0] >= 0.5:
+                    wheatley.reinforce(1000/count, hist=count)
+                    return count
+                if count == 1000:
+                    wheatley.reinforce(-5, hist=count)
+                    return count
+
+            if env_name == 'Pendulum-v0':
+                wheatley.reinforce(np.abs(nov).mean() * wheatley.gamma / wheatley.init_gamma, hist=50)
+                wheatley.learn(0.1)
+                if count == 200:
+                    wheatley.reinforce(-5, hist=count)
+                    return count
+                if done:
+                    wheatley.reinforce(1000/count, hist=count)
+                    return wheatley.total_reward
+
             # if env_name == 'Pendulum-v0':
             #     if wheatley.expected_reward == None:
             #         wheatley.expected_reward = reward
-            #     wheatley.reinforce(reward - wheatley.expected_reward, hist=count)
-            #     wheatley.expected_reward = 0.999 * wheatley.expected_reward + 0.001 * reward
-            #     # wheatley.learn(0.2)
+            #     wheatley.reinforce(np.abs(nov).mean() * wheatley.gamma / wheatley.init_gamma, hist=50)
+            #     wheatley.reinforce(1 * (reward - wheatley.expected_reward), hist=count)
+            #     wheatley.learn(0.1)
+            #     p = 1 / 200
+            #     wheatley.expected_reward = (1 - p) * wheatley.expected_reward + p * reward
             #     if done:
             #         return wheatley.total_reward
-            if env_name == 'Pendulum-v0':
-                wheatley.reinforce(reward - wheatley.total_reward/(count+1), hist=1)
-                if done:
-                    return wheatley.total_reward
 
         wheatley.decay()
         if (count % n == n - 1):
             wheatley.visualize()
-        return None
 
     def show():
         if wheatley.sight is not None:
@@ -128,7 +149,7 @@ def main():
 
 
 
-    counts = 200
+    counts = 2000
     total = np.zeros(counts)
     threader = ThreadPoolExecutor(max_workers=3)
 
@@ -153,8 +174,8 @@ def main():
         n = 100000
         keyboard_press = Controller()
         for step in range(1000000):
-            #if cur % 40 == 0:
-            #   env.render()
+            # if cur % 10 == 0:
+            #     env.render()
             # print(observation)
             # show()
             input()
@@ -163,14 +184,12 @@ def main():
             done = processing(step, env)
             # time.sleep(0.1)
             if done != None:
+                print(done)
                 iter_counts.append(done)
                 break
             if wheatley.mode == "dino":
                 output(keyboard_press)
     print(iter_counts)
-    plt.plot(iter_counts, "o")
-    plt.ylim(-2000, -200) 
-    plt.show()
             # time.sleep(1/max_freq)
     print(total.mean(), total.std())
 
