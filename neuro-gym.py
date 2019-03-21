@@ -9,7 +9,7 @@ from pynput.keyboard import Key, Controller
 import matplotlib.pyplot as plt
 from mss import mss
 from concurrent.futures import ThreadPoolExecutor
-from wheatley import firing_history, repeats, output_n, Mind
+from wheatley import Mind
 
 mode = "gym" # What game are you using
 # env_name = 'MountainCar-v0'
@@ -31,17 +31,17 @@ def main():
         wheatley.fire()
         if wheatley.mode == "xor":
             if count % 20 > 4:
-                if wheatley.xor.sum() / repeats % 2 == wheatley.firings[-1][-output_n:].mean().round():
+                if wheatley.xor.sum() / wheatley.repeats % 2 == wheatley.firings[-1][-wheatley.output_n:].mean().round():
                     wheatley.performance = np.append(wheatley.performance, 1)
                     wheatley.reward = 1
-                    if wheatley.xor.sum() / repeats % 2 == 1:  # True positive
+                    if wheatley.xor.sum() / wheatley.repeats % 2 == 1:  # True positive
                         wheatley.learn(1)
                     else:  # True negative
                         wheatley.learn(1)
                 else:
                     wheatley.performance = np.append(wheatley.performance, 0)
                     wheatley.reward = 0
-                    if wheatley.xor.sum() / repeats % 2 == 1: # False positive
+                    if wheatley.xor.sum() / wheatley.repeats % 2 == 1: # False positive
                         wheatley.reinforce(-reward_amount)
                         wheatley.learn(0.5)
                     else: # False negative
@@ -66,19 +66,23 @@ def main():
             # print("Nov", np.abs(nov).mean())
 
             if env_name == 'Pendulum-v0':
-                # action = ((wheatley.firings[-2] @ wheatley.connections)[-output_n:].mean())
-                action = -1.5 if wheatley.firings[-1][-output_n:].mean() > wheatley.firings[:, -output_n:].mean() else 1.5
+                # action = ((wheatley.firings[-2] @ wheatley.connections)[-wheatley.output_n:].mean())
+                action = -1.5 if wheatley.firings[-1][-wheatley.output_n:].mean() > wheatley.firings[:, -wheatley.output_n:].mean() else 1.5
             if env_name == 'MountainCar-v0':
-                action = 2 if wheatley.firings[-1][-output_n:].mean() > wheatley.firings[:, -output_n:].mean() else 0
+                #action = 2 if wheatley.firings[-1][-wheatley.output_n:].mean() > wheatley.firings[:, -wheatley.output_n:].mean() else 0
+                action_continuous = (wheatley.firings[-1][-wheatley.output_n:].mean(0) > wheatley.firings[:, -wheatley.output_n:].mean(0)).mean()
+                action = 2 if action_continuous >= 2./3 else (0 if action_continuous <= 1./3 else 1)
             if env_name == 'MountainCarContinuous-v0':
-                # action = 2 * ((wheatley.firings[-2] @ wheatley.connections)[-output_n:].mean())
-                action = 2 * (-0.5 + (wheatley.firings[-1][-output_n:].mean(0) > wheatley.firings[:, -output_n:].mean(0)).mean())
+                # action = 2 * ((wheatley.firings[-2] @ wheatley.connections)[-wheatley.output_n:].mean())
+                action = 2 * (-0.5 + (wheatley.firings[-1][-wheatley.output_n:].mean(0) > wheatley.firings[:, -wheatley.output_n:].mean(0)).mean())
             if env_name == 'CartPole-v0':
-                action = 1 if wheatley.firings[-1][-output_n:].mean() > wheatley.firings[:, -output_n:].mean() else 0
+                action = 1 if wheatley.firings[-1][-wheatley.output_n:].mean() > wheatley.firings[:, -wheatley.output_n:].mean() else 0
 
             if not discrete:
                 action = [action]
             observation, reward, done, info = env.step(action)
+            # if count % 10 == 0:
+            #     print(reward)
             wheatley.sight = 2 * (-0.5 + (observation - env.observation_space.low) /
                                   (env.observation_space.high - env.observation_space.low))
             wheatley.total_reward += reward
@@ -89,7 +93,8 @@ def main():
                     if count < 200:
                         print("Bad")
                         # wheatley.reinforce(count / 10, hist=count)
-                        wheatley.reinforce(-10 / count, hist=count)
+                        #wheatley.reinforce(-10 / count, hist=count)
+                        wheatley.reinforce(-count / 1000, hist=count)
                     else:
                         wheatley.reinforce(1)
                 if done:
@@ -156,7 +161,7 @@ def main():
     if mode == "gym":
         env = gym.make(env_name)
         discrete = isinstance(env.action_space, gym.spaces.Discrete)
-        wheatley = Mind(threader, mode=mode, base_n=len(env.observation_space.high))
+        wheatley = Mind(threader, mode=mode, long_plasticity=True, base_n=len(env.observation_space.high))
     else:
         wheatley = Mind(threader, mode=mode, base_n=5)
 
@@ -174,13 +179,18 @@ def main():
         n = 100000
         keyboard_press = Controller()
         for step in range(1000000):
-            # if cur % 10 == 0:
+            # if step % 10 == 0:
             #     env.render()
-            # print(observation)
+            # if step % 100 == 0:
+                # env.render()
+            # if step % 100 == 0:
+            #     print(observation)
+            # if step % 1000 == 0:
+            #     wheatley.plot()
             # show()
             input()
             if step % 20 == 0:
-                wheatley.xor = np.tile(np.random.binomial(1, 0.5, (2,)), repeats)
+                wheatley.xor = np.tile(np.random.binomial(1, 0.5, (2,)), wheatley.repeats)
             done = processing(step, env)
             # time.sleep(0.1)
             if done != None:
