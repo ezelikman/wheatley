@@ -13,9 +13,9 @@ from wheatley import firing_history, repeats, output_n, total_n, Mind
 
 mode = "gym" # What game are you using
 # env_name = 'MountainCar-v0'
-# env_name = 'MountainCarContinuous-v0'
+env_name = 'MountainCarContinuous-v0'
 # env_name = 'CartPole-v0'
-env_name = 'Pendulum-v0'
+# env_name = 'Pendulum-v0'
 # env_name = 'HalfCheetah-v1'
 # env_name = 'Tutankham-ram-v0'
 
@@ -68,9 +68,9 @@ def main():
             # print("Nov", np.abs(nov).mean())
 
             if env_name == 'Pendulum-v0':
-                # action = (((wheatley.firings[-2] @ wheatley.connections)[-output_n:].mean()))
+                action = (((wheatley.firings[-2] @ wheatley.connections)[-output_n:].mean()))
                 # action = -1.5 if wheatley.firings[-1][-output_n:].mean() > wheatley.firings[:, -output_n:].mean() else 1.5
-                action = 8 * (-0.5 + (wheatley.firings[-1, -output_n:].mean(0) > wheatley.firings[:, -output_n:].mean(0)).astype(float).mean())
+                # action = 8 * (-0.5 + (wheatley.firings[-1, -output_n:].mean(0) > wheatley.firings[:, -output_n:].mean(0)).astype(float).mean())
                 # action = 2 * (-0.5 + (wheatley.firings[-1][-output_n:].mean(0) > wheatley.firings[:, -output_n:].mean(0)).mean())
                 # print(action)
             elif env_name == 'MountainCar-v0':
@@ -145,7 +145,9 @@ def main():
                     wheatley.reinforce(-0.1, hist=count, printer=outputer)
                     return count
             elif env_name == 'Pendulum-v0':
-                # if reward > 0:
+                wheatley.reward = reward / 10
+                # if reward < 0:
+                # wheatley.reinforce(reward / 10, hist=50)
                 #     wheatley.reinforce(3, hist=50)
                 # else:
                 #     wheatley.reinforce(reward / 10, hist=50)
@@ -157,12 +159,12 @@ def main():
                 wheatley.learn((reward - wheatley.expected_reward) / 10, printer=outputer)
                 # wheatley.reinforce(2 * nov.mean() * wheatley.gamma / wheatley.init_gamma, hist=count, printer=outputer)
                 # wheatley.reinforce((reward - wheatley.expected_reward) * wheatley.gamma / wheatley.init_gamma, hist=count, printer=outputer)
-                # p = 1 / 5000
+                # p = 1 / 50000
                 # wheatley.expected_reward = (1 - p) * wheatley.expected_reward + p * reward
                 # wheatley.expected_novelty = (1 - p) * wheatley.expected_reward + p * nov.mean()
-                if count == 1000:
+                if count == 200:
                     # outputer = True
-                    wheatley.reinforce((wheatley.total_reward - wheatley.expected_reward * count) / 10, hist=count, printer=outputer)
+                    wheatley.reinforce((wheatley.total_reward - wheatley.expected_reward * count) / 5, hist=count, printer=outputer)
                     return wheatley.total_reward
             elif env_name == 'HalfCheetah-v1':
                 if wheatley.expected_reward == None:
@@ -219,8 +221,6 @@ def main():
             plt.imshow(vis)
             plt.show()
 
-
-
     counts = 10000
     total = np.zeros(counts)
     threader = ThreadPoolExecutor(max_workers=3)
@@ -246,8 +246,8 @@ def main():
         n = 100000
         keyboard_press = Controller()
         for step in range(1000000):
-            if cur % 20 == 0:
-                env.render()
+            # if cur % 20 == 0:
+            #     env.render()
                 # if step == 0:
                 #     print("CUR", cur)
             # print(observation)
